@@ -1,0 +1,93 @@
+<div id="cleverfiller-container">
+    <div id="cleverfiller-inner-header">
+        <h3 id="cf-app-name"></h3>
+        <button type="button" id="cf-hide-button">Hide</button>
+    </div>
+    <div id="cleverfiller-nav">
+        <button class="cf-nav-tab active" data-tab="workflow">Dashboard</button>
+        <button class="cf-nav-tab" data-tab="settings">Settings</button>
+    </div>
+    <div id="cleverfiller-content-wrapper">
+        <div id="cleverfiller-inner-body">
+            <!--setting page-->
+            <div class="cf-tab-content" id="cf-tab-settings">
+                <div class="cf-setting-group">
+                    <h3>AI Model</h3>
+                    <div class="cf-input-field">
+                        <label for="cf-api">Deepseek API Key</label>
+                        <input type="password" id="cf-api-input" placeholder="Enter your API key">
+                    </div>
+                    <div class="cf-input-field">
+                        <label for="cf-model">Model</label>
+                        <select id="cf-model-select">
+                            <option value="deepseek-chat">DeepSeek Chat</option>
+                            <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+                        </select>
+                    </div>
+                    <h3>General</h3>
+                    <div class="cf-toggle-field">
+                        <label for="cf-initial-display">Show panel when start</label>
+                        <label class="switch">
+                            <input type="checkbox" id="cf-initial-display" class="cf-input-switch">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <span class="cf-explanation">To disable this setting, you have to use keyboard shortcut (Alt + S) to
+                        show panel again</span>
+                    <h3>Advanced</h3>
+                    <div class="cf-input-field">
+                        <label for="cf-enlist-tags">Enlist tags</label>
+                        <input type="text" id="cf-enlist-tags" placeholder="input, textarea, select, button">
+                        <button type="button" id="cf-reset-enlist-tags" class="cf-small-button">Reset</button>
+                    </div>
+                    <div class="cf-input-field">
+                        <label for="cf-load-tags">Load tags</label>
+                        <input type="text" id="cf-load-tags" placeholder="button[type=submit], a.submit">
+                        <button type="button" id="cf-reset-load-tags" class="cf-small-button">Reset</button>
+                    </div>
+                    <div id="cleverfiller-controls">
+                        <div class="cf-version">
+                            <span id="cf-version-info"></span>
+                            <br>
+                            <span>Developed by Joolowweng</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Workflow Mode -->
+            <div class="cf-tab-content active" id="cf-tab-workflow">
+                <div class="cf-setting-group">
+                    <div class="cf-input-field">
+                        <label for="cf-context-label">Context</label>
+                        <textarea id="cf-context-textarea" rows="12" placeholder="Enter context information"></textarea>
+                    </div>
+                    <div class="cf-button-group">
+                        <button type="button" id="cf-enlist-button">
+                            Enlist
+                            <span id="cf-enlist-count" class="cf-badge"></span>
+                        </button>
+                        <div class="cf-dropdown-container">
+                            <button type="button" id="cf-load-button">Load</button>
+                            <span id="cf-load-count" class="cf-badge"></span>
+                            <div class="cf-dropdown-menu">
+                                <button type="button" id="cf-afterload-button">After</button>
+                                <button type="button" id="cf-preload-button">Before</button>
+                            </div>
+                        </div>
+                        <button type="button" id="cf-reset-button">Reset</button>
+                        <button type="button" id="cf-run-button">Run</button>
+                    </div>
+                    <div id="cleverfiller-controls">
+                        <div class="cf-loading">
+                            <svg id="cf-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none"
+                                    stroke-dasharray="60 30" />
+                            </svg>
+                            <span id="cf-console-log"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

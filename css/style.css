@@ -1,0 +1,615 @@
+.cf-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background-color: #f44336;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 50%;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 2px;
+    box-sizing: border-box;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    border: 1px solid white;
+    z-index: 2;
+    /* 确保角标显示在最上层 */
+    transform: translate(0, 0);
+    /* 解决某些浏览器中的渲染问题 */
+}
+
+/* 添加这个样式，使按钮成为相对定位容器 */
+#cf-enlist-button {
+    position: relative;
+    background-color: #4a90e2;
+    color: white;
+    overflow: visible !important;
+    /* 确保角标不被裁剪 */
+}
+
+.cf-draggable-list {
+    margin-top: 16px;
+}
+
+#cf-task-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.cf-draggable-item {
+    background-color: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    cursor: grab;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.cf-draggable-item:last-child {
+    margin-bottom: 0;
+}
+
+.cf-draggable-item:hover {
+    background-color: #e0e0e0;
+    transform: scale(1.02);
+}
+
+.cf-draggable-item:active {
+    cursor: grabbing;
+    transform: scale(0.98);
+}
+
+#cleverfiller-nav {
+    display: flex;
+    background-color: rgba(245, 245, 245, 0.7);
+    border-bottom: 1px solid rgba(224, 224, 224, 0.8);
+    padding: 0;
+    flex-shrink: 0;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 1px 10px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    z-index: 10;
+}
+
+#cleverfiller-nav button.cf-nav-tab {
+    flex: 1;
+    padding: 10px 0;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #555;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+#cleverfiller-nav button.cf-nav-tab:hover {
+    background-color: #f0f0f0;
+    color: #4a90e2;
+}
+
+#cleverfiller-nav button.cf-nav-tab.active {
+    color: #4a90e2;
+    border-bottom: 3px solid #4a90e2;
+}
+
+.cf-tab-content {
+    display: none;
+    height: 100%;
+    animation: fadeIn 0.3s ease;
+    overflow-y: auto;
+}
+
+.cf-tab-content.active {
+    display: block;
+}
+
+#cleverfiller-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    /* 防止溢出 */
+}
+
+#cleverfiller-controls {
+    flex-shrink: 0;
+    /* 防止压缩 */
+}
+
+#cleverfiller-container {
+    display: flex;
+    flex-direction: column;
+    height: 75vh;
+    width: 350px;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    overflow-y: auto;
+    color: #333333;
+    z-index: 9999;
+}
+
+#cleverfiller-inner-header {
+    padding: 10px;
+    margin: 0;
+    background-color: #4a90e2;
+    background-image: linear-gradient(135deg, #4a90e2, #7986cb);
+    color: white;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    flex-shrink: 0;
+}
+
+#cleverfiller-inner-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    border-bottom: 0;
+}
+
+#cleverfiller-inner-header button {
+    padding: 6px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    outline: none;
+    text-transform: capitalize;
+    letter-spacing: 0.5px;
+}
+
+#cleverfiller-inner-body {
+    overflow-y: auto;
+    padding: 16px;
+    background-color: #ffffff;
+    color: #333333;
+    box-sizing: border-box;
+    transition: height 0.3s ease;
+}
+
+#cleverfiller-inner-body input:focus,
+#cleverfiller-inner-body textarea:focus,
+#cleverfiller-inner-body select:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+#cleverfiller-inner-body button:hover {
+    opacity: 0.9;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#cleverfiller-inner-body button:active {
+    transform: translateY(1px);
+}
+
+.cf-setting-group h3 {
+    margin: 0 0 16px;
+    color: #4a90e2;
+    font-weight: 500;
+    font-size: 18px;
+}
+
+.cf-input-field {
+    margin-bottom: 16px;
+}
+
+.cf-input-field label {
+    display: block;
+    margin-bottom: 6px;
+    color: #555;
+    font-size: 14px;
+}
+
+.cf-input-field input,
+.cf-input-field select,
+.cf-input-field textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.cf-input-field textarea {
+    resize: none;
+    font-family: inherit;
+}
+
+.cf-input-field #escape-list {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.cf-toggle-field {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    /* Reduced margin to account for explanation text below */
+}
+
+.cf-toggle-field label:first-child {
+    flex: 1;
+    color: #555;
+    font-size: 14px;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cccccc;
+    border-radius: 20px;
+    transition: .3s;
+}
+
+span.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    border-radius: 50%;
+    transition: .3s;
+}
+
+input.cf-input-switch:checked+span.slider:before {
+    transform: translateX(20px);
+}
+
+input.cf-input-switch:checked+span.slider {
+    background-color: #4a90e2;
+}
+
+/* Style for explanation text */
+.cf-explanation {
+    display: block;
+    margin-top: -8px;
+    margin-bottom: 16px;
+    padding-left: 0;
+    font-size: 12px;
+    color: #888;
+    line-height: 1.4;
+    font-weight: normal;
+}
+
+/* 统一毛玻璃按钮样式 */
+.cf-button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+    padding: 0 16px;
+}
+
+.cf-button-group button {
+    flex: 1;
+    padding: 10px 0;
+    background-color: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    min-width: 0;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+    position: relative;
+    overflow: visible;
+}
+
+/* 悬停效果 */
+.cf-button-group button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* 点击效果 */
+.cf-button-group button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 各按钮的特定颜色风格 */
+#cf-enlist-button {
+    background-color: rgba(74, 144, 226, 0.2);
+    border-color: rgba(74, 144, 226, 0.4);
+    color: #2c6cb9;
+}
+
+/* 合并 cf-load-button 样式，消除重复定义 */
+#cf-load-button {
+    background-color: rgba(74, 144, 226, 0.2);
+    border-color: rgba(74, 144, 226, 0.4);
+    color: #2c6cb9;
+    width: 100%;
+    position: relative;
+    padding: 10px 0;
+    text-align: center;
+    text-indent: 0px;
+    /* 减小文本缩进，使文本靠右一些 */
+    padding-right: 10px;
+    /* 减少右侧内边距，使箭头更靠近文本 */
+}
+
+#cf-reset-button {
+    background-color: rgba(74, 144, 226, 0.2);
+    border-color: rgba(74, 144, 226, 0.4);
+    color: #2c6cb9;
+}
+
+#cf-run-button {
+    background-color: rgba(76, 175, 80, 0.2);
+    border-color: rgba(76, 175, 80, 0.4);
+    color: #2e7d32;
+}
+
+/* 微调箭头位置 */
+#cf-load-button:after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    /* 增大右侧距离，使箭头更靠近文本 */
+    top: 50%;
+    width: 0;
+    height: 0;
+    margin-top: -2px;
+    border-bottom: 4px solid currentColor;
+    border-right: 4px solid transparent;
+    border-left: 4px solid transparent;
+    border-top: none;
+}
+
+/* 确保下拉容器占满分配空间 */
+.cf-dropdown-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+
+/* 修复上拉菜单的初始位置偏移问题 */
+.cf-dropdown-menu {
+    position: absolute;
+    bottom: calc(100% + 5px);
+    /* 调整位置 */
+    margin-bottom: 5px;
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    /* 与按钮等宽 */
+    max-width: 100%;
+    /* 移除限制 */
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.08);
+    z-index: 10000;
+    display: none;
+    border: 1px solid rgba(74, 144, 226, 0.4);
+    overflow: hidden;
+    padding: 0;
+    /* 移除内边距 */
+}
+
+.cf-dropdown-container.active .cf-dropdown-menu {
+    display: block !important;
+    animation: fadeIn 0.2s ease forwards;
+}
+
+/* 优化菜单项按钮的样式 */
+.cf-dropdown-menu button {
+    width: 100%;
+    padding: 12px 0;
+    /* 统一上下内边距 */
+    margin: 0;
+    background-color: rgba(255, 255, 255, 0.85);
+    border: none;
+    border-bottom: 1px solid rgba(74, 144, 226, 0.2);
+    color: #2c6cb9;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    /* 文本居中 */
+    box-shadow: none !important;
+    /* 移除可能的阴影 */
+    transform: none !important;
+    /* 确保没有变换 */
+    position: static;
+    /* 避免相对定位造成的问题 */
+    border-radius: 0;
+    /* 移除边角圆润 */
+}
+
+/* 最后一个菜单项移除底部边框 */
+.cf-dropdown-menu button:last-child {
+    border-bottom: none;
+}
+
+/* 添加下拉菜单动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* 改进菜单项的悬停效果 */
+.cf-dropdown-menu button:hover {
+    background-color: rgba(74, 144, 226, 0.1);
+    transform: none;
+    box-shadow: none;
+}
+
+/* 禁用状态 */
+.cf-button-group button:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* 为按钮添加微妙的内部光晕效果 */
+.cf-button-group button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+    border-radius: 8px 8px 0 0;
+    pointer-events: none;
+}
+
+.cf-loading {
+    display: flex;
+    align-items: center;
+    margin-top: 30px;
+    justify-content: center;
+    min-height: 30px;
+    position: relative;
+}
+
+#cf-spinner {
+    display: none;
+    width: 24px;
+    height: 24px;
+}
+
+#cf-console-log {
+    display: block;
+    margin-left: 10px;
+    color: #4a90e2;
+    font-size: 14px;
+    min-height: 20px;
+    line-height: 20px;
+    width: 200px;
+    text-align: center;
+    overflow: hidden;
+    transition: color 0.3s ease;
+}
+
+.cf-version {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: #999;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Modernized reset buttons styling */
+.cf-small-button {
+    font-size: 12px;
+    padding: 6px 12px;
+    margin-top: 8px;
+    background-color: rgba(74, 144, 226, 0.1);
+    border: 1px solid rgba(74, 144, 226, 0.3);
+    border-radius: 4px;
+    color: #4a90e2;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+    text-align: center;
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cf-small-button:hover {
+    background-color: rgba(74, 144, 226, 0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.cf-small-button:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.cf-small-button::before {
+    content: '\21BB';
+    /* Refresh symbol */
+    margin-right: 5px;
+    font-size: 14px;
+}
+
+/* Improve the input field layout for tag fields */
+.cf-input-field input+.cf-small-button {
+    margin-top: 8px;
+}

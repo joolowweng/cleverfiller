@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@types/tampermonkey": "^5.0.4",
+    "openai": "^4.91.0"
+  }
+}
