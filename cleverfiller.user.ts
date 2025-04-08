@@ -61,6 +61,14 @@ async function callDeepSeekAPI(prompt: string): Promise<any> {
                 },
                 data: JSON.stringify(requestData),
                 // @ts-ignore
+                onloadstart: function () {
+                    // Show loading spinner
+                    const spinner = document.getElementById('spinner') as HTMLElement;
+                    const loadingText = document.getElementById('loading-text') as HTMLElement;
+                    spinner.style.display = 'inline-block';
+                    loadingText.style.display = 'inline-block';
+                },
+                // @ts-ignore
                 onload: function (response) {
                     if (response.status === 200) {
                         resolve(JSON.parse(response.responseText));
@@ -320,6 +328,15 @@ function createUI(): void {
     content.style.padding = '10px';
     const savedModel = GM_getValue('model', 'deepseek-chat');
     content.innerHTML = `
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            #spinner {
+                animation: spin 1.5s linear infinite;
+            }
+        </style>
         <label for="api">Deepseek API:</label><br>
         <input type="text" id="api" value=${GM_getValue('api', '')}><br><br>
         <label for="model">Model:</label><br>
@@ -337,6 +354,12 @@ function createUI(): void {
         <button id="submit">Save</button>
         <button id="hightlight">Highlight</button>
         <button id="run">Run</button>
+        </div>
+        <div>
+            <svg id="spinner" style="display: none; width: 24px; height: 24px;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="10" stroke="#0066cc" stroke-width="4" fill="none" stroke-dasharray="60 30" />
+            </svg>
+            <span id="loading-text" style="display: none;">Loading...</span>
         </div>
     `;
 
