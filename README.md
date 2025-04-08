@@ -2,7 +2,7 @@
 
 ## Overview
 
-> [!Warning] InDevlopment
+> [!Warning]
 > A tampermonkey script that fills form fields, using AI to find the best match data for the fields.
 
 ## Installation
