@@ -1,4 +1,3 @@
-/**
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
@@ -9,14 +8,12 @@
 // @downloadURL  https://raw.githubusercontent.com/joolowweng/cleverfiller/main/dist/cleverfiller.user.js
 // @updateURL    https://raw.githubusercontent.com/joolowweng/cleverfiller/main/dist/cleverfiller.user.js
 // @noframes     true
-// @match        https://banweb.cityu.edu.hk/*
-// @match        https://www38.polyu.edu.hk/*
+// @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_info
 // ==/UserScript==
-*/
 'use strict';
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -29,63 +26,95 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 // Add an exception list for attribute name and its value
 const exceptionList = GM_getValue('exceptionList', { labelText: [], id: [], name: [], type: [], maxlength: [-1] });
-// get the version of the script by
-function getVersion() {
+// get the version of the script
+function get_version() {
     return GM_info.script.version;
 }
-function callDeepSeekAPI(prompt) {
+function get_response(options, on_start) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest(Object.assign(Object.assign({}, options), { onloadstart: function () {
+                    if (on_start) {
+                        on_start();
+                    }
+                }, onload: (response) => {
+                    console.log('[CleverFiller] Response Status:', response.status);
+                    if (response.status === 200) {
+                        try {
+                            resolve(JSON.parse(response.responseText)); // Resolve with the parsed response
+                        }
+                        catch (error) {
+                            console.error('[CleverFiller] Failed to parse response:', error);
+                            reject(new Error(`${error}`));
+                        }
+                    }
+                    else {
+                        console.error('[CleverFiller] HTTP Error:', response.status);
+                        reject(new Error(`${response.status}`)); // Resolve with null in case of error
+                    }
+                }, onerror: (error) => {
+                    console.error('[CleverFiller] Request failed:', error);
+                    reject(new Error(`${error}`)); // Resolve with null in case of error
+                } }));
+        });
+    });
+}
+function call_deepseek_api(prompt) {
     return __awaiter(this, void 0, void 0, function* () {
         const url = 'https://api.deepseek.com/v1/chat/completions';
-        const apiKey = GM_getValue('api', '');
+        const method = 'POST';
         const model = GM_getValue('model', 'deepseek-chat');
-        const requestData = {
+        const data = {
             model: model,
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.7,
             stream: false,
         };
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + GM_getValue('api', ''),
+        };
         try {
-            // @ts-ignore
-            const response = yield new Promise((resolve, reject) => {
-                // @ts-ignore
-                GM_xmlhttpRequest({
-                    method: 'POST',
-                    url: url,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
-                    data: JSON.stringify(requestData),
-                    // @ts-ignore
-                    onloadstart: function () {
-                        // Show loading spinner
-                        const spinner = document.getElementById('spinner');
-                        const loadingText = document.getElementById('loading-text');
-                        spinner.style.display = 'inline-block';
-                        loadingText.style.display = 'inline-block';
-                    },
-                    // @ts-ignore
-                    onload: function (response) {
-                        if (response.status === 200) {
-                            resolve(JSON.parse(response.responseText));
-                        }
-                        else {
-                            reject(new Error(`API request failed with status ${response.status}`));
-                        }
-                    },
-                    // @ts-ignore
-                    onerror: function (error) {
-                        reject(new Error(`API request error: ${error}`));
-                    }
-                });
-            });
-            return response;
+            return yield get_response({
+                method: method,
+                url: url,
+                headers: headers,
+                data: JSON.stringify(data),
+            }); // Cast the response to the expected type
         }
         catch (error) {
-            console.error('Error calling DeepSeek API:', error);
-            throw error; // Re-throw to allow caller to handle the error
+            console.error('[CleverFiller] Error calling DeepSeek API:', error);
+            throw error;
         }
     });
+}
+function createPrompt(context, formData) {
+    const prompt = `
+        你是一个JSON数据处理机器人, 需要直接输出填充后的JSON, **不要任何解释**.
+
+        **工作流程**:
+        1. 解析文本信息
+        2. 严格匹配JSON字段
+        3. 仅修改value值
+        4. 返回标准JSON格式
+
+        **要求**:
+        1. 仔细阅读用户提供的文本, 识别与每个JSON对象的labelText, name, type字段相关的信息
+        2. 确保生成的JSON结构与原结构完全一致, 仅修改value字段.
+        3. 保持JSON的原有顺序和结构, 不要添加或删除其他字段.
+        4. 如果文本信息没有明确标明的值或多个值, 请根据上下文进行合理推测.
+        5. 如果推断的值不确定, 请将value字段留空.
+
+        -----------------------
+
+        **文本信息**:
+        ${context}
+
+        **待填充JSON**:
+        ${JSON.stringify(formData)}
+
+    `;
+    return prompt;
 }
 // Function to parse the response from DeepSeek API
 function parseAIResponse(response) {
@@ -181,34 +210,6 @@ function addException(exception) {
     });
     GM_setValue('exceptionList', exceptionList);
 }
-function createPrompt(context, formData = []) {
-    const prompt = `
-        你是一个JSON数据处理机器人, 需要直接输出填充后的JSON, **不要任何解释**.
-
-        **工作流程**:
-        1. 解析文本信息
-        2. 严格匹配JSON字段
-        3. 仅修改value值
-        4. 返回标准JSON格式
-
-        **要求**:
-        1. 仔细阅读用户提供的文本, 识别与每个JSON对象的labelText, name, type字段相关的信息
-        2. 确保生成的JSON结构与原结构完全一致, 仅修改value字段.
-        3. 保持JSON的原有顺序和结构, 不要添加或删除其他字段.
-        4. 如果文本信息没有明确标明的值或多个值, 请根据上下文进行合理推测.
-        5. 如果推断的值不确定, 请将value字段留空.
-
-        -----------------------
-
-        **文本信息**:
-        ${context}
-
-        **待填充JSON**:
-        ${JSON.stringify(formData)}
-
-    `;
-    return prompt;
-}
 // Function to highlight the form elements
 function highlightFormElements(elements, exceptionList) {
     var _a, _b, _c;
@@ -292,7 +293,7 @@ function createUI() {
     header.style.display = 'flex';
     header.style.justifyContent = 'space-between';
     header.style.alignItems = 'center';
-    header.innerHTML = `<h3 style="margin: 0">CleverFiller ${getVersion()}</h3>`;
+    header.innerHTML = `<h3 style="margin: 0">CleverFiller ${get_version()}</h3>`;
     // Create toggle button
     const toggleButton = document.createElement('button');
     toggleButton.textContent = 'Hide';
@@ -397,7 +398,7 @@ function createUI() {
             }
             const prompt = createPrompt(context, formData); // Call the function to create the prompt
             console.log('Generated prompt:', prompt);
-            const response = yield callDeepSeekAPI(prompt); // Call the DeepSeek API
+            const response = yield call_deepseek_api(prompt); // Call the DeepSeek API
             console.log('DeepSeek API response:', response);
             const parsedResponse = parseAIResponse(response); // Parse the API response
             console.log('Parsed response:', parsedResponse);
@@ -407,7 +408,8 @@ function createUI() {
 }
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
-        createUI(); // Call the function to create the UI
+        const response = call_deepseek_api('Hello, world!'); // Test the API call
+        console.log('API response:', response); // Log the response to the console
     });
 }
 main();
