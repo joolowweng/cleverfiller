@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.0.3
+// @version      1.1.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -27,12 +27,16 @@ interface ExceptionList {
     maxlength: number[];
 }
 
+
 // Add an exception list for attribute name and its value
 const exceptionList: ExceptionList = GM_getValue('exceptionList', { labelText: [], id: [], name: [], type: [], maxlength: [-1] });
 
-function get_version(): string {
+function get_app_info(): { name: string; version: string } {
     // get the version of the script
-    return GM_info.script.version;
+    const script = GM_info.script;
+    const name = script.name;
+    const version = script.version;
+    return { name, version };
 }
 
 async function get_response<T>(options: Tampermonkey.Request<any>, on_start?: () => void): Promise<T | string> {
@@ -68,7 +72,7 @@ async function get_response<T>(options: Tampermonkey.Request<any>, on_start?: ()
 }
 
 async function call_deepseek_api<T>(prompt: string): Promise<T> {
-    // April 9 2025 - Refractoried the code to improve readability and maintainability.
+    // April 9 2025 - Refratored the code to improve readability and maintainability.
     const url = 'https://api.deepseek.com/v1/chat/completions';
     const method = 'POST';
     const model = GM_getValue('model', 'deepseek-chat');
@@ -294,129 +298,256 @@ function highlightFormElements(elements: NodeListOf<HTMLInputElement>, exception
     }
     return formData; // Return the formData array
 }
-
-// function to create a UI for the user to input parameters
 function createUI(): void {
-    // Create main container
-    // Create main container
-    const container = document.createElement('div');
-    container.id = 'cleverfiller-container';
-    container.style.width = '300px';
-    container.style.position = 'fixed';
-    container.style.top = '10px';
-    container.style.right = '10px';
-    container.style.backgroundColor = 'white';
-    container.style.border = '1px solid black';
-    container.style.borderRadius = '5px';
-    container.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
-    container.style.zIndex = '9999';
-    container.style.transition = 'all 0.3s ease-in-out';
-    container.style.overflow = 'hidden';
-
-    // Create collapsed button (initially hidden)
-    const collapsedButton = document.createElement('button');
-    collapsedButton.textContent = 'CleverFiller Settings';
-    collapsedButton.style.position = 'fixed';
-    collapsedButton.style.top = '10px';
-    collapsedButton.style.right = '10px';
-    collapsedButton.style.zIndex = '9999';
-    collapsedButton.style.display = 'none';
-    collapsedButton.style.padding = '5px 10px';
-    collapsedButton.style.cursor = 'pointer';
-    document.body.appendChild(collapsedButton);
-
-    // Create header
-    const header = document.createElement('div');
-    header.style.padding = '10px';
-    header.style.backgroundColor = '#f0f0f0';
-    header.style.borderBottom = '1px solid #ddd';
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.innerHTML = `<h3 style="margin: 0">CleverFiller ${get_version()}</h3>`;
-
-    // Create toggle button
-    const toggleButton = document.createElement('button');
-    toggleButton.textContent = 'Hide';
-    toggleButton.style.padding = '3px 8px';
-    toggleButton.style.cursor = 'pointer';
-    header.appendChild(toggleButton);
-
-    // Create content container
-    const content = document.createElement('div');
-    content.id = 'cleverfiller-settings';
-    content.style.padding = '10px';
-    const savedModel: string = GM_getValue('model', 'deepseek-chat');
-    content.innerHTML = `
-        <style>
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
+    // 2025.04.10
+    // - Added keyboard shortcut (Alt + S) to toggle the UI.
+    function create_container(): HTMLElement {
+        const container = document.createElement('div');
+        container.id = 'cleverfiller-container';
+        container.style = `
+        display: none;
+        width: 350px;
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        z-index: 9999;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        max-height: 100vh;
+        overflow-y: auto;
+        color: #333333;
+        z-index: 9999;
+        `;
+        function event_listener(event: KeyboardEvent): void {
+            if (event.altKey && event.key === 's') {
+                event.preventDefault();
+                container.style.display = 'block';
             }
-            #spinner {
-                animation: spin 1.5s linear infinite;
+        }
+        document.addEventListener('keydown', event_listener);
+        return container;
+    }
+
+    // 2025.04.10
+    // - Fully redesigned the header to improve aesthetics and usability.
+    function create_inner_header(container: HTMLElement): HTMLElement {
+        const inner_header = document.createElement('div');
+        inner_header.id = 'cleverfiller-inner-header';
+        inner_header.style = `
+        padding: 10px;
+        margin: 0;
+        background-color: #4a90e2;
+        background-image: linear-gradient(135deg, #4a90e2, #7986cb);
+        color: white;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        border-top-left-radius: 5px;
+        border-top-right-radius: 5px;
+        `;
+        inner_header.innerHTML = `
+        <h3>${get_app_info().name}</h3><span style="font-size: 12px;">v${get_app_info().version}</span>
+        `;
+        const toggleButton = document.createElement('button');
+        // Create toggle button
+        toggleButton.textContent = 'Hide';
+        toggleButton.style = `
+        padding: 6px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        background-color: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        outline: none;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        `;
+        toggleButton.addEventListener('mouseover', () => {
+            toggleButton.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+        });
+        toggleButton.addEventListener('mouseout', () => {
+            toggleButton.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+        });
+        toggleButton.addEventListener('click', () => {
+            container.style.display = 'none';
+        });
+        inner_header.appendChild(toggleButton);
+
+        return inner_header;
+    }
+    // 2025.04.10
+    // - Redesigned a modern, material-design styled settings interface.
+    function create_inner_body() {
+        const inner_body = document.createElement('div');
+        inner_body.id = 'cleverfiller-inner-body';
+        inner_body.style = `
+        padding: 10px;
+        background-color: #ffffff;
+        color: #333333;
+        `;
+        // Create a modern, material-design styled settings interface
+        inner_body.innerHTML = `
+        <div style="padding: 16px;">
+            <div class="cf-setting-group">
+            <h3 style="margin: 0 0 16px; color: #4a90e2; font-weight: 500; font-size: 18px;">Settings</h3>
+
+            <div class="cf-input-field" style="margin-bottom: 16px;">
+                <label for="api" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Deepseek API Key</label>
+                <input value=${GM_getValue('api', '')} type="text" id="api" placeholder="Enter your API key" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: border-color 0.2s ease;">
+            </div>
+
+            <div class="cf-input-field" style="margin-bottom: 16px;">
+                <label for="model" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Model</label>
+                <select id="model" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <option ${GM_getValue('model', 'deepseek-chat') === 'deepseek-chat' ? 'selected' : ''} value="deepseek-chat">DeepSeek Chat</option>
+                <option ${GM_getValue('model', 'deepseek-reasoner') === 'deepseek-reasoner' ? 'selected' : ''} value="deepseek-reasoner">DeepSeek Reasoner</option>
+                </select>
+            </div>
+
+            <div class="cf-input-field" style="margin-bottom: 16px;">
+                <label for="context" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Context</label>
+                <textarea id="context" rows="4" placeholder="Enter context information" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; resize: none; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">${GM_getValue('context', '')}</textarea>
+            </div>
+
+            <div class="cf-input-field" style="margin-bottom: 16px;">
+                <label for="exception" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Exception List</label>
+                <textarea id="exception" rows="4" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; resize: none; font-family: monospace; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"></textarea>
+            </div>
+
+            <div class="cf-toggle-field" style="display: flex; align-items: center; margin-bottom: 16px;">
+                <label for="ai" style="flex: 1; color: #555; font-size: 14px;">Enable AI Parsing</label>
+                <label class="switch" style="position: relative; display: inline-block; width: 40px; height: 20px;">
+                <input ${GM_getValue('ai', false) ? 'checked' : ''} type="checkbox" id="ai" style="opacity: 0; width: 0; height: 0;">
+                <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cccccc; border-radius: 20px; transition: .3s;"></span>
+                </label>
+            </div>
+            </div>
+
+            <div class="cf-button-group" style="display: flex; justify-content: space-between; margin-top: 24px;">
+            <button id="cf-submit" style="padding: 10px 16px; background-color: #4a90e2; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Save</button>
+            <button id="hightlight" style="padding: 10px 16px; background-color: #f0f0f0; color: #333; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Highlight</button>
+            <button id="run" style="padding: 10px 16px; background-color: #4caf50; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Run</button>
+            </div>
+
+            <div class="cf-loading" style="display: flex; align-items: center; margin-top: 16px; justify-content: center;">
+            <svg id="spinner" style="display: none; width: 24px; height: 24px;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none" stroke-dasharray="60 30" />
+            </svg>
+            <span id="loading-text" style="display: none; margin-left: 10px; color: #4a90e2; font-size: 14px;">Processing...</span>
+            </div>
+        </div>
+
+        <style>
+            #cleverfiller-inner-body input:focus,
+            #cleverfiller-inner-body textarea:focus,
+            #cleverfiller-inner-body select:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+            }
+
+            #cleverfiller-inner-body button:hover {
+            opacity: 0.9;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+
+            #cleverfiller-inner-body button:active {
+            transform: translateY(1px);
+            }
+
+            #submit:hover { background-color: #3a80d2; }
+            #hightlight:hover { background-color: #e0e0e0; }
+            #run:hover { background-color: #3c9f40; }
+
+            /* Toggle switch styles */
+            input#ai:checked + span.slider {
+                background-color: #4a90e2;
+            }
+
+            input#ai:checked + span.slider:before {
+                transform: translateX(20px);
+            }
+
+            span.slider:before {
+                position: absolute;
+                content: "";
+                height: 16px;
+                width: 16px;
+                left: 2px;
+                bottom: 2px;
+                background-color: white;
+                border-radius: 50%;
+                transition: .3s;
             }
         </style>
-        <label for="api">Deepseek API:</label><br>
-        <input type="text" id="api" value=${GM_getValue('api', '')}><br><br>
-        <label for="model">Model:</label><br>
-        <select id="model">
-            <option value="deepseek-chat" ${savedModel === 'deepseek-chat' ? 'selected' : ''}>DeepSeek Chat</option>
-            <option value="deepseek-reasoner" ${savedModel === 'deepseek-reasoner' ? 'selected' : ''}>DeepSeek Reasoner</option>
-        </select><br><br>
-        <label for="context">Context:</label><br>
-        <textarea id="context" rows="4" cols="30" style="resize: none;">${GM_getValue('context', '')}</textarea><br><br>
-        <label for="exception">Exception List:</label><br>
-        <textarea id="exception" rows="4" cols="30" style="resize: none;">${JSON.stringify(exceptionList, null, 2)}</textarea><br><br>
-        <label for="ai">AI Parsing:</label>
-        <input type="checkbox" id="ai" ${GM_getValue('ai', false) ? 'checked' : ''}><br><br>
-        <div style="display: flex; justify-content: space-between;">
-        <button id="submit">Save</button>
-        <button id="hightlight">Highlight</button>
-        <button id="run">Run</button>
-        </div>
-        <div>
-            <svg id="spinner" style="display: none; width: 24px; height: 24px;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="#0066cc" stroke-width="4" fill="none" stroke-dasharray="60 30" />
-            </svg>
-            <span id="loading-text" style="display: none;">Loading...</span>
-        </div>
-    `;
+        `;
 
-    // Add elements to container
+        // Add an event listener to update the slider background when checkbox state changes
+        setTimeout(() => {
+            const aiToggle = document.getElementById('ai') as HTMLInputElement;
+            if (aiToggle) {
+                aiToggle.addEventListener('change', function () {
+                    const slider = this.nextElementSibling as HTMLElement;
+                    if (this.checked) {
+                        slider.style.backgroundColor = '#4a90e2';
+                    } else {
+                        slider.style.backgroundColor = '#cccccc';
+                    }
+                });
+            }
+        }, 100);
+
+        function submitForm(event: Event): void {
+            event.preventDefault(); // Prevent the default form submission
+            for (const id of ['api', 'model', 'context']) {
+                const input = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+                if (input) {
+                    const value = input.value.trim();
+                    if (value === '') {
+                        alert(`${id} cannot be empty!`);
+                        return;
+                    }
+                }
+                GM_setValue(id, (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement).value); // Save to Tampermonkey storage
+            }
+            const exception = (document.getElementById('exception') as HTMLTextAreaElement).value;
+            const ai = (document.getElementById('ai') as HTMLInputElement).checked;
+            GM_setValue('ai', ai); // Save AI parsing option to Tampermonkey storage
+            GM_setValue('exceptionList', JSON.parse(exception)); // Save exception list to Tampermonkey storage
+        }
+
+        // Add event listener after the element is appended to the document
+        setTimeout(() => {
+            const submitButton = document.getElementById('cf-submit');
+            if (submitButton) {
+                submitButton.addEventListener('click', submitForm);
+            }
+        }, 100);
+
+        return inner_body;
+    }
+
+    // Initialize the UI
+    const container = create_container();
+    const header = create_inner_header(container);
+    const inner_body = create_inner_body(); // Create the inner body element
     container.appendChild(header);
-    container.appendChild(content);
+    container.appendChild(inner_body);
     document.body.appendChild(container);
 
-    // Toggle visibility functionality
-    toggleButton.addEventListener('click', () => {
-        container.style.display = 'none';
-        collapsedButton.style.display = 'block';
-    });
-
-    collapsedButton.addEventListener('click', () => {
-        container.style.display = 'block';
-        collapsedButton.style.display = 'none';
-    });
 
     let formData: Array<{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }> = []; // Initialize formData as an empty array with type
-    // Add event listener for save button
-    document.getElementById('submit')?.addEventListener('click', () => {
-        const api = (document.getElementById('api') as HTMLInputElement).value;
-        const model = (document.getElementById('model') as HTMLSelectElement).value;
-        const context = (document.getElementById('context') as HTMLTextAreaElement).value;
-        const exception = (document.getElementById('exception') as HTMLTextAreaElement).value;
-        const ai = (document.getElementById('ai') as HTMLInputElement).checked;
-        GM_setValue('api', api); // Save API to Tampermonkey storage
-        GM_setValue('model', model); // Save model to Tampermonkey storage
-        GM_setValue('context', context); // Save context to Tampermonkey storage
-        GM_setValue('ai', ai); // Save AI parsing option to Tampermonkey storage
-        GM_setValue('exceptionList', JSON.parse(exception)); // Save exception list to Tampermonkey storage
-        if (context == '') {
-            alert('Context cannot be empty!');
-            return;
-        }
-    });
+
 
     // Add event listener for highlight button
     document.getElementById('hightlight')?.addEventListener('click', () => {
@@ -458,10 +589,4 @@ function createUI(): void {
 }
 
 
-async function main() {
-
-    const response = call_deepseek_api('Hello, world!'); // Test the API call
-    console.log('API response:', response); // Log the response to the console
-}
-
-main();
+createUI();
