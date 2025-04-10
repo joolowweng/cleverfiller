@@ -32,11 +32,13 @@ interface ExceptionList {
 const exceptionList: ExceptionList = GM_getValue('exceptionList', { labelText: [], id: [], name: [], type: [], maxlength: [-1] });
 
 function get_app_info(): { name: string; version: string } {
-    // get the version of the script
+
     const script = GM_info.script;
     const name = script.name;
     const version = script.version;
+
     return { name, version };
+
 }
 
 async function get_response<T>(options: Tampermonkey.Request<any>, on_start?: () => void): Promise<T | string> {
@@ -161,17 +163,18 @@ function parseAIResponse(response: any): Array<{ labelText: string; name: string
     }
 }
 
-// scan the page to find the form elements
-function scanFormElements(): NodeListOf<HTMLInputElement> {
-    // Get all input, textarea, select elements
+// 2025.04.11
+// - Fixed the issue where the script was not able to find the form elements correctly.
+function scan_form_elements(): NodeListOf<HTMLInputElement> {
+
     const allInputs = document.querySelectorAll<HTMLInputElement>('input, textarea, select');
 
-    // Convert to array and filter out elements inside #cleverfiller-settings
+    // Exclude elements within div[id="cleverfiller-container"]
     const filteredInputs = Array.from(allInputs).filter(input => {
-        return !input.closest('#cleverfiller-settings');
+        const parentDiv = input.closest('div#cleverfiller-container');
+        return !parentDiv;
     });
 
-    // Cast back to NodeListOf<HTMLInputElement> for type compatibility
     return filteredInputs as unknown as NodeListOf<HTMLInputElement>;
 }
 
@@ -352,7 +355,17 @@ function createUI(): void {
         border-top-right-radius: 5px;
         `;
         inner_header.innerHTML = `
-        <h3>${get_app_info().name}</h3><span style="font-size: 12px;">v${get_app_info().version}</span>
+        <h3>${get_app_info().name}</h3>
+        <style>
+            #cleverfiller-inner-header h3 {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 500;
+                color: white;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+                border-bottom: 0;
+            }
+        </style>
         `;
         const toggleButton = document.createElement('button');
         // Create toggle button
@@ -385,8 +398,11 @@ function createUI(): void {
 
         return inner_header;
     }
+
     // 2025.04.10
     // - Redesigned a modern, material-design styled settings interface.
+    // 2025.04.11
+    // - UI Tweaks
     function create_inner_body() {
         const inner_body = document.createElement('div');
         inner_body.id = 'cleverfiller-inner-body';
@@ -395,7 +411,6 @@ function createUI(): void {
         background-color: #ffffff;
         color: #333333;
         `;
-        // Create a modern, material-design styled settings interface
         inner_body.innerHTML = `
         <div style="padding: 16px;">
             <div class="cf-setting-group">
@@ -444,6 +459,9 @@ function createUI(): void {
                 <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none" stroke-dasharray="60 30" />
             </svg>
             <span id="loading-text" style="display: none; margin-left: 10px; color: #4a90e2; font-size: 14px;">Processing...</span>
+            </div>
+            <div class="cf-version" style="margin-top: 16px; text-align: center; font-size: 12px; color: #999;">
+            <span>Version: ${get_app_info().version}</span>
             </div>
         </div>
 
@@ -551,7 +569,7 @@ function createUI(): void {
 
     // Add event listener for highlight button
     document.getElementById('hightlight')?.addEventListener('click', () => {
-        const inputs = scanFormElements();
+        const inputs = scan_form_elements();
 
         formData = highlightFormElements(inputs, exceptionList); // make formData a global variable
 
@@ -571,7 +589,7 @@ function createUI(): void {
                 alert('Model cannot be empty!');
                 return;
         }
-        const inputs = scanFormElements(); // Call the function to scan the form elements
+        const inputs = scan_form_elements(); // Call the function to scan the form elements
         if (GM_getValue('ai', false)) {
             if (context == '' || context == null) {
                 alert('Context cannot be empty!');
