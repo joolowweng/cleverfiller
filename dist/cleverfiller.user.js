@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.2
+// @version      1.2.3
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -218,7 +218,7 @@ function addException(exception) {
     GM_setValue('EscapeList', InclusionList);
 }
 // 2025.04.11: Tweaked style of highlighted elements.
-function highlightFormElements(elements) {
+function highlight_form_elements(elements) {
     for (const element of Array.from(elements)) {
         element.style = `
         background-color: #e0f7fa;
@@ -229,14 +229,37 @@ function highlightFormElements(elements) {
         element.placeholder = 'CleverFiller takes over';
     }
 }
-function add_hover_effect(elements) {
+function hover_overlay_handler(elements, event_handler) {
     for (const element of Array.from(elements)) {
-        element.addEventListener('mouseover', () => {
-            element.style.backgroundColor = '#b2ebf2'; // Change background color on hover
+        // 获取元素位置
+        const rect = element.getBoundingClientRect();
+        // 创建透明覆盖层
+        const overlay = document.createElement('div');
+        overlay.className = 'cleverfiller-hover-overlay';
+        // 设置样式 - 完全透明
+        overlay.style.position = 'absolute';
+        overlay.style.top = `${rect.top + window.scrollY}px`;
+        overlay.style.left = `${rect.left}px`;
+        overlay.style.width = `${rect.width}px`;
+        overlay.style.height = `${rect.height}px`;
+        overlay.style.zIndex = '999';
+        overlay.style.backgroundColor = 'transparent';
+        overlay.style.cursor = 'pointer';
+        overlay.style.border = '2px dashed transparent';
+        // 悬停效果 - 只在悬停时显示边框
+        overlay.addEventListener('mouseover', () => {
+            overlay.style.border = '2px dashed #4a90e2';
+            overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.7); color: white; font-size: 12px; padding: 2px;">Select</div>';
         });
-        element.addEventListener('mouseout', () => {
-            element.style.backgroundColor = ''; // Reset background color on mouse out
+        overlay.addEventListener('mouseout', () => {
+            overlay.style.border = '2px dashed transparent';
+            overlay.innerHTML = '';
         });
+        // 点击事件
+        if (event_handler) {
+            overlay.addEventListener('click', event_handler); // Attach the event handler if provided
+        }
+        document.body.appendChild(overlay);
     }
 }
 function get_window_url() {
@@ -270,7 +293,7 @@ function createUI() {
     const context_input = container.querySelector('#cf-context-textarea');
     context_input.value = GM_getValue('context', '');
     function activate_clever_filler_display(event) {
-        if (event.altKey && event.key === 's') {
+        if (event.altKey && (event.key.toLowerCase() === 's')) {
             event.preventDefault();
             cleverfiller_container.style.display = 'block';
         }
@@ -279,15 +302,22 @@ function createUI() {
     // 2025.04.10: Fully redesigned the header to improve aesthetics and usability.
     const hide_button = cleverfiller_container.querySelector('#cf-hide-button');
     const hightlight_button = cleverfiller_container.querySelector('#cf-enlist-button');
+    const submit_button = cleverfiller_container.querySelector('#cf-submit-button');
     setTimeout(() => {
         hide_button.addEventListener('click', () => {
             cleverfiller_container.style.display = 'none';
         });
         hightlight_button.addEventListener('click', () => {
             const inputtable_elements = scan_form_elements();
-            highlightFormElements(inputtable_elements);
-            add_hover_effect(inputtable_elements);
+            highlight_form_elements(inputtable_elements);
+            hover_overlay_handler(inputtable_elements);
         });
-    }, 100);
+        submit_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
+            // save the API key and model to Tampermonkey storage
+            GM_setValue('api', api_input.value);
+            GM_setValue('model', model_option.value);
+            GM_setValue('context', context_input.value);
+        }));
+    }, 1000);
 }
 createUI();
