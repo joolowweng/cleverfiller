@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.1
+// @version      1.2.2
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -279,13 +279,13 @@ function createUI(): void {
 
     const heading = container.querySelector('[id="cf-app-name"]') as HTMLHeadingElement;
     heading.textContent = `${get_app_info().name}`;
-    const api_input = container.querySelector('[id="api"]') as HTMLInputElement;
+    const api_input = container.querySelector('#cf-api-input') as HTMLInputElement;
     api_input.value = GM_getValue('api', '');
-    const model_option = container.querySelector('[id="model"]') as HTMLSelectElement;
+    const model_option = container.querySelector('#cf-model-select') as HTMLSelectElement;
     model_option.value = GM_getValue('model', 'deepseek-chat');
-    const version = container.querySelector('[id="cf-version-info"]') as HTMLSpanElement;
+    const version = container.querySelector('#cf-version-info') as HTMLSpanElement;
     version.textContent = `version: ${get_app_info().version}`;
-    const context_input = container.querySelector('[id="cf-context-textarea"]') as HTMLTextAreaElement;
+    const context_input = container.querySelector('#cf-context-textarea') as HTMLTextAreaElement;
     context_input.value = GM_getValue('context', '');
 
     function activate_clever_filler_display(event: KeyboardEvent): void {
@@ -297,18 +297,19 @@ function createUI(): void {
     document.addEventListener('keydown', activate_clever_filler_display);
 
     // 2025.04.10: Fully redesigned the header to improve aesthetics and usability.
-    const hide_button = cleverfiller_container.querySelector('[id="hide"]') as HTMLButtonElement;
-    hide_button.addEventListener('click', () => {
-        cleverfiller_container.style.display = 'none';
-    });
+    const hide_button = cleverfiller_container.querySelector('#cf-hide-button') as HTMLButtonElement;
+    const hightlight_button = cleverfiller_container.querySelector('#cf-enlist-button') as HTMLButtonElement;
 
-    const hightlight_button = cleverfiller_container.querySelector('[id="highlight"]') as HTMLButtonElement;
-    hightlight_button.addEventListener('click', () => {
-        const inputtable_elements = scan_form_elements();
-        highlightFormElements(inputtable_elements);
-        add_hover_effect(inputtable_elements);
-    });
-
+    setTimeout(() => {
+        hide_button.addEventListener('click', () => {
+            cleverfiller_container.style.display = 'none';
+        });
+        hightlight_button.addEventListener('click', () => {
+            const inputtable_elements = scan_form_elements();
+            highlightFormElements(inputtable_elements);
+            add_hover_effect(inputtable_elements);
+        });
+    }, 100);
 }
 
 

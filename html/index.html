@@ -1,7 +1,7 @@
 <div id="cleverfiller-container">
     <div id="cleverfiller-inner-header">
         <h3 id="cf-app-name"></h3>
-        <button type="button" id="hide">Hide</button>
+        <button type="button" id="cf-hide-button">Hide</button>
     </div>
 
     <div id="cleverfiller-inner-body">
@@ -9,13 +9,13 @@
             <h3>Settings</h3>
 
             <div class="cf-input-field">
-                <label for="api">Deepseek API Key</label>
-                <input type="text" id="api" placeholder="Enter your API key">
+                <label for="cf-api">Deepseek API Key</label>
+                <input type="text" id="cf-api-input" placeholder="Enter your API key">
             </div>
 
             <div class="cf-input-field"></div>
-            <label for="model">Model</label>
-            <select id="model">
+            <label for="cf-model">Model</label>
+            <select id="cf-model-select">
                 <option value="deepseek-chat">DeepSeek Chat</option>
                 <option value="deepseek-reasoner">DeepSeek Reasoner</option>
             </select>
@@ -26,24 +26,18 @@
             <textarea id="cf-context-textarea" rows="4" placeholder="Enter context information"></textarea>
         </div>
 
-        <div class="cf-input-field">
-            <label for="escape-list">Exception List</label>
-            <textarea id="escape-list" rows="4">${InclusionList}</textarea>
-        </div>
-
         <div class="cf-toggle-field">
-            <label for="ai">Enable AI Parsing</label>
+            <label for="cf-ai">Enable AI Parsing</label>
             <label class="switch">
-                <input type="checkbox" id="ai">
+                <input type="checkbox" id="cf-ai-input">
                 <span class="slider"></span>
             </label>
         </div>
     </div>
 
     <div class="cf-button-group">
-        <button id="cf-submit">Save</button>
-        <button id="hightlight">Highlight</button>
-        <button id="run">Run</button>
+        <button id="cf-submit-button">Save</button>
+        <button id="cf-enlist-button">Enlist</button>
     </div>
 
     <div class="cf-loading">
