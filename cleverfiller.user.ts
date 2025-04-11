@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.0
+// @version      1.2.1
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -285,7 +285,8 @@ function createUI(): void {
     model_option.value = GM_getValue('model', 'deepseek-chat');
     const version = container.querySelector('[id="cf-version-info"]') as HTMLSpanElement;
     version.textContent = `version: ${get_app_info().version}`;
-
+    const context_input = container.querySelector('[id="cf-context-textarea"]') as HTMLTextAreaElement;
+    context_input.value = GM_getValue('context', '');
 
     function activate_clever_filler_display(event: KeyboardEvent): void {
         if (event.altKey && event.key === 's') {

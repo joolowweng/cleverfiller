@@ -267,6 +267,8 @@ function createUI() {
     model_option.value = GM_getValue('model', 'deepseek-chat');
     const version = container.querySelector('[id="cf-version-info"]');
     version.textContent = `version: ${get_app_info().version}`;
+    const context_input = container.querySelector('[id="cf-context-textarea"]');
+    context_input.value = GM_getValue('context', '');
     function activate_clever_filler_display(event) {
         if (event.altKey && event.key === 's') {
             event.preventDefault();
