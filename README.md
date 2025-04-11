@@ -1,9 +1,8 @@
 # CleverFiller
 
-> [!Warning]
-> Still in Development
-
 ## Overview
+
+![ui_preview](assets/ui_preview.jpg)
 
 A tampermonkey script that fills form fields, using AI to find the best match data for the fields.
 
