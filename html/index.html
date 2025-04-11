@@ -10,7 +10,7 @@
 
             <div class="cf-input-field">
                 <label for="api">Deepseek API Key</label>
-                <input value=${GM_getValue('api', '' )} type="text" id="api" placeholder="Enter your API key">
+                <input type="text" id="api" placeholder="Enter your API key">
             </div>
 
             <div class="cf-input-field"></div>
@@ -56,7 +56,7 @@
         <span id="loading-text">Processing...</span>
     </div>
     <div class="cf-version">
-        <span>Version: ${get_app_info().version}</span>
+        <span id="cf-version-info"></span>
     </div>
 </div>
 </div>

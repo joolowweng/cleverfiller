@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.1.0
+// @version      1.2.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -12,24 +12,16 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_getResourceText
+// @grant        GM_getResourceURL
 // @grant        GM_info
+// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html
 // ==/UserScript==
 
 'use strict';
 
-// Define interface for exception list
-interface ExceptionList {
-    [key: string]: any[];
-    labelText: any[];
-    id: any[];
-    name: any[];
-    type: any[];
-    maxlength: number[];
-}
-
-
-// Add an exception list for attribute name and its value
-const exceptionList: ExceptionList = GM_getValue('exceptionList', { labelText: [], id: [], name: [], type: [], maxlength: [-1] });
+// 2025-04-11 @ 10:02:49: Modify the logic that includes elements in the list rather than excluding them.
+const InclusionList: Array<Record<string, any>> = GM_getValue('InclusionList', []);
 
 function get_app_info(): { name: string; version: string } {
 
@@ -145,26 +137,7 @@ function parse_ai_response(response: any): Array<Record<string, unknown>> {
     }
 }
 
-// Soon to be deprecated
-function parseAIResponse(response: any): Array<{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }> {
-    try {
-        // Extract content using optional chaining for safety
-        const content = response?.choices?.[0]?.message?.content;
-        if (!content) {
-            throw new Error('Invalid API response format')
-        }
-        else {
-            const cleanStringData = content.substring(content.indexOf('['), content.lastIndexOf(']') + 1);
-            return JSON.parse(cleanStringData);
-        }
-    } catch (error) {
-        console.error('Failed to parse API response:', error);
-        return [];
-    }
-}
-
-// 2025.04.11
-// - Fixed the issue where the script was not able to find the form elements correctly.
+// 2025.04.11: Fixed the issue where the script was not able to find the form elements correctly.
 function scan_form_elements(): NodeListOf<HTMLInputElement> {
 
     const allInputs = document.querySelectorAll<HTMLInputElement>('input, textarea, select');
@@ -178,48 +151,55 @@ function scan_form_elements(): NodeListOf<HTMLInputElement> {
     return filteredInputs as unknown as NodeListOf<HTMLInputElement>;
 }
 
-function* filterElements(elements: NodeListOf<HTMLInputElement>, exceptionList: { [key: string]: any }): Generator<[{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }, HTMLInputElement]> {
+function get_label_text(element: HTMLInputElement): string {
+    // Get the label text of the element
+    const parentDiv = element.closest('div');
+    let labelText = parentDiv ? parentDiv.querySelector('label')?.textContent || '' : ''; // Get the label text
+    if (labelText === '') {
+        // Look for the parent <tr> element to find the sibling <td> element
+        const parentTr = element.closest('tr');
+        const siblingTd = parentTr ? parentTr.querySelector('td') : null;
+        labelText = siblingTd ? siblingTd.textContent || '' : '';
+    }
+    return labelText; // Return the label text
+}
+
+function* include_elements(elements: NodeListOf<HTMLInputElement>, exceptionList: Array<Record<string, string>>): Generator<[HTMLInputElement, string]> {
 
     for (const element of Array.from(elements)) {
-        // Get the name, type, maxlength of the input element
-        const name = element.name || '';
-        const type = element.type || '';
-        const id = element.id || '';
-        const maxlength = element.maxLength || 0; // Use 0 if maxLength is not set
-        const parentDiv = element.closest('div'); // Get the label text
+        // get the attributes and values of the element
+
+        const attributes: NamedNodeMap = element.attributes;
+        const attributeValues: { [key: string]: string } = {};
+        for (let i = 0; i < attributes.length; i++) {
+            const attr = attributes[i];
+            attributeValues[attr.name] = attr.value;
+        }
+
+        // get the Label Text of the element
+        const parentDiv = element.closest('div');
         let labelText = parentDiv ? parentDiv.querySelector('label')?.textContent || '' : ''; // Get the label text
         if (labelText === '') {
-
             // Look for the parent <tr> element to find the sibling <td> element
             const parentTr = element.closest('tr');
             const siblingTd = parentTr ? parentTr.querySelector('td') : null;
             labelText = siblingTd ? siblingTd.textContent || '' : '';
-
-        }
-        // Check if any field matches an exception
-        if (exceptionList.labelText?.includes(labelText) ||
-            exceptionList.id?.includes(id) ||
-            exceptionList.name?.includes(name) ||
-            exceptionList.type?.includes(type) ||
-            exceptionList.maxlength?.includes(maxlength)) {
-            // If any field is in the exception list, skip this element
-            console.log(`Skipping element: {labelText: ${labelText}, name: ${name}, id: ${id}, type: ${type}}`);
-            continue;
         }
 
-        // Create a JSON object for the input element
-        const elementData = {
-            labelText: labelText,
-            name: name,
-            id: id,
-            type: type,
-            maxlength: maxlength,
-            value: '',
-        };
-        yield [elementData, element];
+        // check if attributeValues is in the exception list
+        for (const exception of exceptionList) {
+            for (const [key, value] of Object.entries(exception)) {
+                if (attributeValues[key] === value) {
+                    continue;
+                }
+            }
+        }
+
+        yield [element, labelText];
     }
 
 }
+
 
 // Load form data once and fill the inputs
 function fillForm(filteredElements: Generator<[{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }, HTMLInputElement]>, data: Array<{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }> = []): void {
@@ -232,378 +212,102 @@ function fillForm(filteredElements: Generator<[{ labelText: string; name: string
 }
 
 // Function to add new exception to the exception list
-function addException(exception: { [key: string]: any }): void {
+function addException(exception: { [key: string]: string }): void {
 
-    Object.keys(exception).forEach(key => {
-        if (!exceptionList[key]) {
-            exceptionList[key] = [];
-        }
-
-        // Handle both array and single value cases
-        if (Array.isArray(exception[key])) {
-            exceptionList[key].push(...exception[key]);
-        } else {
-            exceptionList[key].push(exception[key]);
-        }
-    });
-
-    GM_setValue('exceptionList', exceptionList);
+    // Check if the exception is already in the list
+    const existingException = InclusionList.find((item) => {
+        return Object.entries(exception).every(([key, value]) => item[key] === value);
+    }
+    );
+    if (existingException) {
+        console.log('Exception already exists in the list:', exception);
+        return;
+    }
+    // Add the new exception to the list
+    InclusionList.push(exception);
+    // Save the updated exception list to Tampermonkey storage
+    GM_setValue('EscapeList', InclusionList);
 }
 
-// Function to highlight the form elements
-function highlightFormElements(elements: NodeListOf<HTMLInputElement>, exceptionList: { [key: string]: any }): Array<{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }> {
-    const formData: Array<{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }> = []; // Specify the correct object type
+// 2025.04.11: Tweaked style of highlighted elements.
+function highlightFormElements(elements: NodeListOf<HTMLInputElement>): void {
 
-    for (const [elementData, element] of filterElements(elements, exceptionList)) { // Call the filterElements function to filter the elements
-        element.style.border = '2px solid red';
-        element.style.backgroundColor = 'yellow';
-        element.placeholder = 'Detected by CleverFiller';
-        // create a button to add the element to the exception list
-        const addByName = document.createElement('button');
-        const addById = document.createElement('button');
-        const addByLabel = document.createElement('button');
-
-        addByName.textContent = 'Exclude by Name: ' + (elementData.name ? elementData.name : 'N/A');
-        addById.textContent = 'Exclude by ID: ' + (elementData.id ? elementData.id : 'N/A');
-        addByLabel.textContent = 'Exclude by Label: ' + (elementData.labelText ? elementData.labelText : 'N/A');
-
-        addByName.style.marginLeft = '5px';
-        addById.style.marginLeft = '5px';
-        addByLabel.style.marginLeft = '5px';
-
-        element.parentElement?.appendChild(addByName);
-        element.parentElement?.appendChild(addById);
-        element.parentElement?.appendChild(addByLabel);
-
-        addByName.addEventListener('click', () => {
-            const exception = { name: elementData.name.trim() };
-            addException(exception);
-            alert(`${elementData.labelText ? elementData.labelText : 'Element'} has been added to the exception list.`);
-            // refresh the page to apply the changes
-            location.reload();
-        });
-        addById.addEventListener('click', () => {
-            const exception = { id: elementData.id.trim() };
-            addException(exception);
-            alert(`${elementData.labelText ? elementData.labelText : 'Element'} has been added to the exception list.`);
-            // refresh the page to apply the changes
-            location.reload();
-        });
-        addByLabel.addEventListener('click', () => {
-            const exception = { labelText: elementData.labelText.trim() };
-            addException(exception);
-            alert(`${elementData.labelText ? elementData.labelText : 'Element'} has been added to the exception list.`);
-            // refresh the page to apply the changes
-            location.reload();
-        });
-
-        formData.push(elementData); // Push the element data to the formData array
-    }
-    return formData; // Return the formData array
-}
-function createUI(): void {
-    // 2025.04.10
-    // - Added keyboard shortcut (Alt + S) to toggle the UI.
-    function create_container(): HTMLElement {
-        const container = document.createElement('div');
-        container.id = 'cleverfiller-container';
-        container.style = `
-        display: none;
-        width: 350px;
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background-color: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        z-index: 9999;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        overflow: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        max-height: 100vh;
-        overflow-y: auto;
-        color: #333333;
-        z-index: 9999;
-        `;
-        function event_listener(event: KeyboardEvent): void {
-            if (event.altKey && event.key === 's') {
-                event.preventDefault();
-                container.style.display = 'block';
-            }
-        }
-        document.addEventListener('keydown', event_listener);
-        return container;
-    }
-
-    // 2025.04.10
-    // - Fully redesigned the header to improve aesthetics and usability.
-    function create_inner_header(container: HTMLElement): HTMLElement {
-        const inner_header = document.createElement('div');
-        inner_header.id = 'cleverfiller-inner-header';
-        inner_header.style = `
-        padding: 10px;
-        margin: 0;
-        background-color: #4a90e2;
-        background-image: linear-gradient(135deg, #4a90e2, #7986cb);
-        color: white;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        border-top-left-radius: 5px;
-        border-top-right-radius: 5px;
-        `;
-        inner_header.innerHTML = `
-        <h3>${get_app_info().name}</h3>
-        <style>
-            #cleverfiller-inner-header h3 {
-                margin: 0;
-                font-size: 16px;
-                font-weight: 500;
-                color: white;
-                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-                border-bottom: 0;
-            }
-        </style>
-        `;
-        const toggleButton = document.createElement('button');
-        // Create toggle button
-        toggleButton.textContent = 'Hide';
-        toggleButton.style = `
-        padding: 6px 12px;
-        font-size: 14px;
-        font-weight: 500;
-        background-color: rgba(255, 255, 255, 0.2);
-        color: white;
-        border: none;
+    for (const element of Array.from(elements)) {
+        element.style = `
+        background-color: #e0f7fa;
+        border: 2px solid #4a90e2;
         border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-        outline: none;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        transition: all 0.3s ease;
         `;
-        toggleButton.addEventListener('mouseover', () => {
-            toggleButton.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
-        });
-        toggleButton.addEventListener('mouseout', () => {
-            toggleButton.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
-        });
-        toggleButton.addEventListener('click', () => {
-            container.style.display = 'none';
-        });
-        inner_header.appendChild(toggleButton);
-
-        return inner_header;
+        element.placeholder = 'CleverFiller takes over';
     }
+}
 
-    // 2025.04.10
-    // - Redesigned a modern, material-design styled settings interface.
-    // 2025.04.11
-    // - UI Tweaks
-    function create_inner_body() {
-        const inner_body = document.createElement('div');
-        inner_body.id = 'cleverfiller-inner-body';
-        inner_body.style = `
-        padding: 10px;
-        background-color: #ffffff;
-        color: #333333;
-        `;
-        inner_body.innerHTML = `
-        <div style="padding: 16px;">
-            <div class="cf-setting-group">
-            <h3 style="margin: 0 0 16px; color: #4a90e2; font-weight: 500; font-size: 18px;">Settings</h3>
-
-            <div class="cf-input-field" style="margin-bottom: 16px;">
-                <label for="api" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Deepseek API Key</label>
-                <input value=${GM_getValue('api', '')} type="text" id="api" placeholder="Enter your API key" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: border-color 0.2s ease;">
-            </div>
-
-            <div class="cf-input-field" style="margin-bottom: 16px;">
-                <label for="model" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Model</label>
-                <select id="model" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <option ${GM_getValue('model', 'deepseek-chat') === 'deepseek-chat' ? 'selected' : ''} value="deepseek-chat">DeepSeek Chat</option>
-                <option ${GM_getValue('model', 'deepseek-reasoner') === 'deepseek-reasoner' ? 'selected' : ''} value="deepseek-reasoner">DeepSeek Reasoner</option>
-                </select>
-            </div>
-
-            <div class="cf-input-field" style="margin-bottom: 16px;">
-                <label for="context" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Context</label>
-                <textarea id="context" rows="4" placeholder="Enter context information" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; resize: none; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">${GM_getValue('context', '')}</textarea>
-            </div>
-
-            <div class="cf-input-field" style="margin-bottom: 16px;">
-                <label for="exception" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Exception List</label>
-                <textarea id="exception" rows="4" style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; resize: none; font-family: monospace; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"></textarea>
-            </div>
-
-            <div class="cf-toggle-field" style="display: flex; align-items: center; margin-bottom: 16px;">
-                <label for="ai" style="flex: 1; color: #555; font-size: 14px;">Enable AI Parsing</label>
-                <label class="switch" style="position: relative; display: inline-block; width: 40px; height: 20px;">
-                <input ${GM_getValue('ai', false) ? 'checked' : ''} type="checkbox" id="ai" style="opacity: 0; width: 0; height: 0;">
-                <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cccccc; border-radius: 20px; transition: .3s;"></span>
-                </label>
-            </div>
-            </div>
-
-            <div class="cf-button-group" style="display: flex; justify-content: space-between; margin-top: 24px;">
-            <button id="cf-submit" style="padding: 10px 16px; background-color: #4a90e2; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Save</button>
-            <button id="hightlight" style="padding: 10px 16px; background-color: #f0f0f0; color: #333; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Highlight</button>
-            <button id="run" style="padding: 10px 16px; background-color: #4caf50; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Run</button>
-            </div>
-
-            <div class="cf-loading" style="display: flex; align-items: center; margin-top: 16px; justify-content: center;">
-            <svg id="spinner" style="display: none; width: 24px; height: 24px;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none" stroke-dasharray="60 30" />
-            </svg>
-            <span id="loading-text" style="display: none; margin-left: 10px; color: #4a90e2; font-size: 14px;">Processing...</span>
-            </div>
-            <div class="cf-version" style="margin-top: 16px; text-align: center; font-size: 12px; color: #999;">
-            <span>Version: ${get_app_info().version}</span>
-            </div>
-        </div>
-
-        <style>
-            #cleverfiller-inner-body input:focus,
-            #cleverfiller-inner-body textarea:focus,
-            #cleverfiller-inner-body select:focus {
-            outline: none;
-            border-color: #4a90e2;
-            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
-            }
-
-            #cleverfiller-inner-body button:hover {
-            opacity: 0.9;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            }
-
-            #cleverfiller-inner-body button:active {
-            transform: translateY(1px);
-            }
-
-            #submit:hover { background-color: #3a80d2; }
-            #hightlight:hover { background-color: #e0e0e0; }
-            #run:hover { background-color: #3c9f40; }
-
-            /* Toggle switch styles */
-            input#ai:checked + span.slider {
-                background-color: #4a90e2;
-            }
-
-            input#ai:checked + span.slider:before {
-                transform: translateX(20px);
-            }
-
-            span.slider:before {
-                position: absolute;
-                content: "";
-                height: 16px;
-                width: 16px;
-                left: 2px;
-                bottom: 2px;
-                background-color: white;
-                border-radius: 50%;
-                transition: .3s;
-            }
-        </style>
-        `;
-
-        // Add an event listener to update the slider background when checkbox state changes
-        setTimeout(() => {
-            const aiToggle = document.getElementById('ai') as HTMLInputElement;
-            if (aiToggle) {
-                aiToggle.addEventListener('change', function () {
-                    const slider = this.nextElementSibling as HTMLElement;
-                    if (this.checked) {
-                        slider.style.backgroundColor = '#4a90e2';
-                    } else {
-                        slider.style.backgroundColor = '#cccccc';
-                    }
-                });
-            }
-        }, 100);
-
-        function submitForm(event: Event): void {
-            event.preventDefault(); // Prevent the default form submission
-            for (const id of ['api', 'model', 'context']) {
-                const input = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-                if (input) {
-                    const value = input.value.trim();
-                    if (value === '') {
-                        alert(`${id} cannot be empty!`);
-                        return;
-                    }
-                }
-                GM_setValue(id, (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement).value); // Save to Tampermonkey storage
-            }
-            const exception = (document.getElementById('exception') as HTMLTextAreaElement).value;
-            const ai = (document.getElementById('ai') as HTMLInputElement).checked;
-            GM_setValue('ai', ai); // Save AI parsing option to Tampermonkey storage
-            GM_setValue('exceptionList', JSON.parse(exception)); // Save exception list to Tampermonkey storage
-        }
-
-        // Add event listener after the element is appended to the document
-        setTimeout(() => {
-            const submitButton = document.getElementById('cf-submit');
-            if (submitButton) {
-                submitButton.addEventListener('click', submitForm);
-            }
-        }, 100);
-
-        return inner_body;
+function add_hover_effect(elements: NodeListOf<HTMLInputElement>): void {
+    for (const element of Array.from(elements)) {
+        element.addEventListener('mouseover', () => {
+            element.style.backgroundColor = '#b2ebf2'; // Change background color on hover
+        });
+        element.addEventListener('mouseout', () => {
+            element.style.backgroundColor = ''; // Reset background color on mouse out
+        });
     }
+}
 
-    // Initialize the UI
-    const container = create_container();
-    const header = create_inner_header(container);
-    const inner_body = create_inner_body(); // Create the inner body element
-    container.appendChild(header);
-    container.appendChild(inner_body);
+function get_window_url(): string {
+    const url = window.location.href; // Get the current URL of the window
+    return url; // Return the URL
+}
+
+function get_element_attributes(element: HTMLInputElement): { [key: string]: string } {
+    const attributes: NamedNodeMap = element.attributes;
+    const attributeValues: { [key: string]: string } = {};
+    for (let i = 0; i < attributes.length; i++) {
+        const attr = attributes[i];
+        attributeValues[attr.name] = attr.value;
+    }
+    return attributeValues; // Return the attribute values as an object
+}
+
+// 2025-04-11 @ 11:28:50: Extracted the HTML to a separate file for better maintainability.
+function createUI(): void {
+    const container = document.createElement('div');
+    const container_html = GM_getResourceText('index');
+    container.innerHTML = container_html;
     document.body.appendChild(container);
+    const cleverfiller_container = container.querySelector('[id="cleverfiller-container"]') as HTMLDivElement;
+
+    const heading = container.querySelector('[id="cf-app-name"]') as HTMLHeadingElement;
+    heading.textContent = `${get_app_info().name}`;
+    const api_input = container.querySelector('[id="api"]') as HTMLInputElement;
+    api_input.value = GM_getValue('api', '');
+    const model_option = container.querySelector('[id="model"]') as HTMLSelectElement;
+    model_option.value = GM_getValue('model', 'deepseek-chat');
+    const version = container.querySelector('[id="cf-version-info"]') as HTMLSpanElement;
+    version.textContent = `version: ${get_app_info().version}`;
 
 
-    let formData: Array<{ labelText: string; name: string; id: string; type: string; maxlength: number; value: any; }> = []; // Initialize formData as an empty array with type
+    function activate_clever_filler_display(event: KeyboardEvent): void {
+        if (event.altKey && event.key === 's') {
+            event.preventDefault();
+            cleverfiller_container.style.display = 'block';
+        }
+    }
+    document.addEventListener('keydown', activate_clever_filler_display);
 
-
-    // Add event listener for highlight button
-    document.getElementById('hightlight')?.addEventListener('click', () => {
-        const inputs = scan_form_elements();
-
-        formData = highlightFormElements(inputs, exceptionList); // make formData a global variable
-
-        console.log('Filtered elements:', formData);
+    // 2025.04.10: Fully redesigned the header to improve aesthetics and usability.
+    const hide_button = cleverfiller_container.querySelector('[id="hide"]') as HTMLButtonElement;
+    hide_button.addEventListener('click', () => {
+        cleverfiller_container.style.display = 'none';
     });
 
-    // Add event listener for run button
-    document.getElementById('run')?.addEventListener('click', async () => {
-        const api = (document.getElementById('api') as HTMLInputElement).value;
-        const model = (document.getElementById('model') as HTMLSelectElement).value;
-        const context = (document.getElementById('context') as HTMLTextAreaElement).value;
-        switch (true) {
-            case (api == ''):
-                alert('API cannot be empty!');
-                return;
-            case (model == ''):
-                alert('Model cannot be empty!');
-                return;
-        }
-        const inputs = scan_form_elements(); // Call the function to scan the form elements
-        if (GM_getValue('ai', false)) {
-            if (context == '' || context == null) {
-                alert('Context cannot be empty!');
-                return;
-            }
-            const prompt = create_prompt(context, formData); // Call the function to create the prompt
-            console.log('Generated prompt:', prompt);
-            const response = await call_deepseek_api(prompt); // Call the DeepSeek API
-            console.log('DeepSeek API response:', response);
-            const parsedResponse = parseAIResponse(response); // Parse the API response
-            console.log('Parsed response:', parsedResponse);
-            fillForm(filterElements(inputs, exceptionList), parsedResponse); // Call the function to fill the form
-        }
+    const hightlight_button = cleverfiller_container.querySelector('[id="highlight"]') as HTMLButtonElement;
+    hightlight_button.addEventListener('click', () => {
+        const inputtable_elements = scan_form_elements();
+        highlightFormElements(inputtable_elements);
+        add_hover_effect(inputtable_elements);
     });
+
 }
 
 
