@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.4
+// @version      1.2.5
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -308,22 +308,44 @@ function createUI(): void {
     const submit_button = cleverfiller_container.querySelector('#cf-submit-button') as HTMLButtonElement;
 
     setTimeout(() => {
+
         hide_button.addEventListener('click', () => {
             cleverfiller_container.style.display = 'none';
         });
+
         hightlight_button.addEventListener('click', () => {
             const inputtable_elements = scan_form_elements();
             highlight_form_elements(inputtable_elements);
             hover_overlay_handler(inputtable_elements);
         });
+
         submit_button.addEventListener('click', async () => {
-            // save the API key and model to Tampermonkey storage
-            GM_setValue('api', api_input.value);
-            GM_setValue('model', model_option.value);
-            GM_setValue('context', context_input.value);
+            // Get elements for animation
+            const loadingText = cleverfiller_container.querySelector('#loading-text') as HTMLElement;
+
+            loadingText.style.display = 'inline-block';
+            submit_button.disabled = true;
+
+            // Save settings (with a small delay to see the animation)
+            setTimeout(() => {
+                // Save the settings
+                GM_setValue('api', api_input.value);
+                GM_setValue('model', model_option.value);
+                GM_setValue('context', context_input.value);
+
+                // Show success state
+                loadingText.textContent = 'Saved';
+                loadingText.style.color = '#4CAF50';
+
+                setTimeout(() => {
+                    loadingText.style.display = 'none';
+                    loadingText.style.color = '#4a90e2';
+                    submit_button.disabled = false;
+                }, 100);
+            }, 100);  // Short delay to make the animation visible
         });
 
-    }, 1000);
+    }, 500);
 }
 
 createUI();
