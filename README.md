@@ -2,7 +2,9 @@
 
 ## Overview
 
-![ui_preview](assets/ui_preview.jpg)
+<div align="center" style="width: 50%; margin: auto; padding: 20px;">
+    <img src="assets/ui_preview.jpg" alt="logo" style="height: 50%"/>
+</div>
 
 A tampermonkey script that fills form fields, using AI to find the best match data for the fields.
 
