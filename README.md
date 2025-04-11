@@ -2,9 +2,7 @@
 
 ## Overview
 
-<div align="center" style="width: 50%; margin: auto; padding: 20px;">
-    ![GitHub example](assets/example.png)
-</div>
+![Example](assets/example.png)
 
 A tampermonkey script that fills form fields, using AI to find the best match data for the fields.
 
