@@ -1,0 +1,126 @@
+<div style="padding: 16px;">
+    <div class="cf-setting-group">
+        <h3 style="margin: 0 0 16px; color: #4a90e2; font-weight: 500; font-size: 18px;">Settings</h3>
+
+        <div class="cf-input-field" style="margin-bottom: 16px;">
+            <label for="api" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Deepseek API
+                Key</label>
+            <input value=${GM_getValue('api', '' )} type="text" id="api" placeholder="Enter your API key"
+                style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: border-color 0.2s ease;">
+        </div>
+
+        <div class="cf-input-field" style="margin-bottom: 16px;">
+            <label for="model" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Model</label>
+            <select id="model"
+                style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <option ${GM_getValue('model', 'deepseek-chat' )==='deepseek-chat' ? 'selected' : '' }
+                    value="deepseek-chat">DeepSeek Chat</option>
+                <option ${GM_getValue('model', 'deepseek-reasoner' )==='deepseek-reasoner' ? 'selected' : '' }
+                    value="deepseek-reasoner">DeepSeek Reasoner</option>
+            </select>
+        </div>
+
+        <div class="cf-input-field" style="margin-bottom: 16px;">
+            <label for="context"
+                style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Context</label>
+            <textarea id="context" rows="4" placeholder="Enter context information"
+                style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; resize: none; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">${GM_getValue('context', '')}</textarea>
+        </div>
+
+        <div class="cf-input-field" style="margin-bottom: 16px;">
+            <label for="escape-list" style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">Exception
+                List</label>
+            <textarea id="escape-list" rows="4"
+                style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px; resize: none; font-family: monospace; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">${InclusionList}</textarea>
+        </div>
+
+        <div class="cf-toggle-field" style="display: flex; align-items: center; margin-bottom: 16px;">
+            <label for="ai" style="flex: 1; color: #555; font-size: 14px;">Enable AI Parsing</label>
+            <label class="switch" style="position: relative; display: inline-block; width: 40px; height: 20px;">
+                <input ${GM_getValue('ai', false) ? 'checked' : '' } type="checkbox" id="ai"
+                    style="opacity: 0; width: 0; height: 0;">
+                <span class="slider"
+                    style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cccccc; border-radius: 20px; transition: .3s;"></span>
+            </label>
+        </div>
+    </div>
+
+    <div class="cf-button-group" style="display: flex; justify-content: space-between; margin-top: 24px;">
+        <button id="cf-submit"
+            style="padding: 10px 16px; background-color: #4a90e2; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Save</button>
+        <button id="hightlight"
+            style="padding: 10px 16px; background-color: #f0f0f0; color: #333; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Highlight</button>
+        <button id="run"
+            style="padding: 10px 16px; background-color: #4caf50; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease;">Run</button>
+    </div>
+
+    <div class="cf-loading" style="display: flex; align-items: center; margin-top: 16px; justify-content: center;">
+        <svg id="spinner" style="display: none; width: 24px; height: 24px;" viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none" stroke-dasharray="60 30" />
+        </svg>
+        <span id="loading-text"
+            style="display: none; margin-left: 10px; color: #4a90e2; font-size: 14px;">Processing...</span>
+    </div>
+    <div class="cf-version" style="margin-top: 16px; text-align: center; font-size: 12px; color: #999;">
+        <span>Version: ${get_app_info().version}</span>
+    </div>
+</div>
+
+<style>
+    #cleverfiller-inner-body {
+        padding: 16px;
+        background-color: #ffffff;
+        color: #333333;
+    }
+
+    #cleverfiller-inner-body input:focus,
+    #cleverfiller-inner-body textarea:focus,
+    #cleverfiller-inner-body select:focus {
+        outline: none;
+        border-color: #4a90e2;
+        box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+    }
+
+    #cleverfiller-inner-body button:hover {
+        opacity: 0.9;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    #cleverfiller-inner-body button:active {
+        transform: translateY(1px);
+    }
+
+    #submit:hover {
+        background-color: #3a80d2;
+    }
+
+    #hightlight:hover {
+        background-color: #e0e0e0;
+    }
+
+    #run:hover {
+        background-color: #3c9f40;
+    }
+
+    /* Toggle switch styles */
+    input#ai:checked+span.slider {
+        background-color: #4a90e2;
+    }
+
+    input#ai:checked+span.slider:before {
+        transform: translateX(20px);
+    }
+
+    span.slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        border-radius: 50%;
+        transition: .3s;
+    }
+</style>
