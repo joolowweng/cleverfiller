@@ -275,9 +275,9 @@ function createUI(): void {
     const container_html = GM_getResourceText('index');
     container.innerHTML = container_html;
     document.body.appendChild(container);
-    const cleverfiller_container = container.querySelector('[id="cleverfiller-container"]') as HTMLDivElement;
+    const cleverfiller_container = container.querySelector('#cleverfiller-container') as HTMLDivElement;
 
-    const heading = container.querySelector('[id="cf-app-name"]') as HTMLHeadingElement;
+    const heading = container.querySelector('#cf-app-name') as HTMLHeadingElement;
     heading.textContent = `${get_app_info().name}`;
     const api_input = container.querySelector('#cf-api-input') as HTMLInputElement;
     api_input.value = GM_getValue('api', '');

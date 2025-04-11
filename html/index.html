@@ -41,8 +41,8 @@
     </div>
 
     <div class="cf-loading">
-        <svg id="spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"></svg>
-        <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none" stroke-dasharray="60 30" />
+        <svg id="spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none" stroke-dasharray="60 30" />
         </svg>
         <span id="loading-text">Processing...</span>
     </div>
@@ -226,7 +226,7 @@
         transition: .3s;
     }
 
-    input#ai:checked+span.slider:before {
+    input#cf-ai-input:checked+span.slider:before {
         transform: translateX(20px);
     }
 
@@ -245,21 +245,21 @@
         transition: background-color 0.2s ease;
     }
 
-    #cf-submit {
+    #cf-submit-button {
         background-color: #4a90e2;
         color: white;
     }
 
-    #cf-submit:hover {
+    #cf-submit-button:hover {
         background-color: #3a80d2;
     }
 
-    #hightlight {
+    #cf-enlist-button {
         background-color: #f0f0f0;
         color: #333;
     }
 
-    #hightlight:hover {
+    #cf-enlist-button:hover {
         background-color: #e0e0e0;
     }
 
