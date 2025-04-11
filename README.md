@@ -1,10 +1,22 @@
 # CleverFiller
 
-## Overview
-
 ![Example](assets/example.png)
 
-A tampermonkey script that fills form fields, using AI to find the best match data for the fields.
+## Overview
+
+A tampermonkey script that fills form fields, using AI model to find the best match data for the fields. Simply, it just frees you a lot of time from filling out boring forms.
+
+Now it only supports Deepseek, but there are plans to support more AI models in the future. Support for Chinese is also planned. There are still some bugs to fix, and the workflow feature will most likely be added soon.
+
+## Usage
+
+> [!NOTE]
+> You need a [Deepseek API](https://deepseek.ai/) key to enable implementation of AI model.
+
+1. Click the **Enlist** button to scan the fillable fields in the form.
+2. Input text containing everything you need to fill for the form and leave it to the AI model to find the best match data for the fields.
+3. Click the **Run** button to fill the form fields.
+4. There you go!
 
 ## Installation
 
