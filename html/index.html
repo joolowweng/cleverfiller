@@ -13,12 +13,13 @@
                 <input type="text" id="cf-api-input" placeholder="Enter your API key">
             </div>
 
-            <div class="cf-input-field"></div>
-            <label for="cf-model">Model</label>
-            <select id="cf-model-select">
-                <option value="deepseek-chat">DeepSeek Chat</option>
-                <option value="deepseek-reasoner">DeepSeek Reasoner</option>
-            </select>
+            <div class="cf-input-field">
+                <label for="cf-model">Model</label>
+                <select id="cf-model-select">
+                    <option value="deepseek-chat">DeepSeek Chat</option>
+                    <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+                </select>
+            </div>
         </div>
 
         <div class="cf-input-field">
@@ -235,6 +236,8 @@
         display: flex;
         justify-content: space-between;
         margin-top: 24px;
+        margin-left: 16px;
+        margin-right: 16px;
     }
 
     .cf-button-group button {

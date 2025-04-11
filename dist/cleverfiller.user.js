@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.8
+// @version      1.2.9
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -29,6 +29,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 // 2025-04-11 @ 10:02:49: Modify the logic that includes elements in the list rather than excluding them.
 const EnlistArray = GM_getValue('enlist', []);
+const ElementCache = [];
 function get_app_info() {
     const script = GM_info.script;
     const name = script.name;
@@ -95,30 +96,24 @@ function call_deepseek_api(prompt) {
         }
     });
 }
+// 2025-04-11 @ 21:16:35: Changed the prompt and improved the parsing logic.
 function create_prompt(context, formData) {
-    // April 9 2025 - Added a new prompt format to improve the AI's understanding of the task.
     const prompt = `
-        你是一个JSON数据处理机器人, 需要直接输出填充后的JSON, **不要任何解释**.
+        你是一个Web数据处理专家, 需要根据网页表单的字段信息, 结合我提供的文本信息, 判断这些字段的值应该是什么.
+        直接返回字符串格式的值, **不要任何解释**.
 
         **工作流程**:
-        1. 解析文本信息
-        2. 严格匹配JSON字段
-        3. 仅修改value值
-        4. 返回标准JSON格式
-
-        **要求**:
         1. 仔细阅读用户提供的文本, 识别与每个JSON对象字段相关的信息
-        2. 确保生成的JSON结构与原结构完全一致, 仅修改value字段.
-        3. 保持JSON的原有顺序和结构, 不要添加或删除其他字段.
-        4. 如果文本信息没有明确标明的值或多个值, 请根据上下文进行合理推测.
-        5. 如果推断的值不确定, 请将value字段留空.
+        2. 如果文本信息没有明确标明的值或多个值, 请根据上下文进行合理推测.
+        3. 如果推断的值不确定, 请返回空字符串.
+        4. 如果文本信息中没有相关信息, 请返回空字符串.
 
         -----------------------
 
         **文本信息**:
         ${context}
 
-        **待填充JSON**:
+        **JSON格式的字段信息**:
         ${JSON.stringify(formData)}
 
     `;
@@ -149,6 +144,7 @@ function scan_form_elements() {
     });
     return filteredInputs;
 }
+// TODO: Improve the logic to find the label text of the element.
 function get_label_text(element) {
     var _a;
     // Get the label text of the element
@@ -224,13 +220,41 @@ function hover_overlay_handler(elements) {
     }
 }
 function enlist_element(element) {
+    // Cache the enlisted HTML element in the array
     // Generate a unique identifier for this element to prevent duplicates
-    const attributeValues = get_element_attributes(element);
+    let attributeValues = get_element_attributes(element);
+    // 定义需要排除的属性列表
+    const excludeAttributes = [
+        'style', // 样式可能会变化
+        'class', // 类可能会变化
+        'value', // 输入的值会变化
+        'tabindex', // 标签索引可能会变化
+        'disabled', // 禁用状态可能会变化
+        'readonly', // 只读状态可能会变化
+        'autocomplete', // 自动完成设置不影响元素标识
+        'placeholder', // 占位符文本不影响元素标识
+        'aria-checked', // 可访问性状态可能会变化
+        'aria-selected',
+        'aria-expanded',
+        'aria-pressed',
+    ];
+    // 排除所有不需要的属性
+    excludeAttributes.forEach(attr => {
+        if (attr in attributeValues) {
+            delete attributeValues[attr];
+        }
+    });
+    // 排除所有以 'data-' 开头的动态属性
+    Object.keys(attributeValues).forEach(key => {
+        if (key.startsWith('data-')) {
+            delete attributeValues[key];
+        }
+    });
     const url = get_window_url();
     const labelText = get_label_text(element);
-    // Create an element signature for comparison
+    // 创建元素签名用于比较
     const elementSignature = `${url}|${labelText}|${JSON.stringify(attributeValues)}`;
-    // Check if element is already enlisted to prevent duplicates
+    // 检查元素是否已经存在，防止重复
     const alreadyExists = EnlistArray.some(item => {
         const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
         return itemSignature === elementSignature;
@@ -241,6 +265,9 @@ function enlist_element(element) {
             labelText: labelText,
             attributeValues: attributeValues
         };
+        EnlistArray.push(data);
+        ElementCache.push(element); // Add the element to the cache
+        GM_setValue('enlist', EnlistArray); // 将更新的数组保存到存储中 (取消注释)
         console.log('Enlisted element:', data);
     }
 }
@@ -297,21 +324,25 @@ function createUI() {
         submit_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
             // Get elements for animation
             const loadingText = cleverfiller_container.querySelector('#cf-console-log');
+            // First show saving state
+            loadingText.textContent = 'Saving...';
+            loadingText.style.color = '#4a90e2'; // Blue color for loading
             submit_button.disabled = true;
-            // Save settings (with a small delay to see the animation)
+            // Small delay to show the saving state
             setTimeout(() => {
                 // Save the settings
                 GM_setValue('api', api_input.value);
                 GM_setValue('model', model_option.value);
                 GM_setValue('context', context_input.value);
                 // Show success state
+                loadingText.style.color = '#4CAF50'; // Green color for success
                 loadingText.textContent = 'Saved';
-                loadingText.style.color = '#4CAF50';
+                // Clear the message after 2 seconds
                 setTimeout(() => {
-                    loadingText.style.color = '#4a90e2';
+                    loadingText.textContent = ''; // Clear text
                     submit_button.disabled = false;
-                }, 100);
-            }, 100); // Short delay to make the animation visible
+                }, 500);
+            }, 500); // Short delay to make the animation visible
         }));
     }, 500);
 }
