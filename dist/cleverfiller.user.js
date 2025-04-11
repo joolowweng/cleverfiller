@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.3.0
+// @version      1.3.1
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -15,7 +15,7 @@
 // @grant        GM_getResourceText
 // @grant        GM_getResourceURL
 // @grant        GM_info
-// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html
+// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html?ts=1.3.1
 // @run-at       document-start
 // ==/UserScript==
 'use strict';
@@ -182,12 +182,10 @@ function highlight_form_elements(elements) {
 }
 function hover_overlay_handler(elements) {
     for (const element of Array.from(elements)) {
-        // 获取元素位置
         const rect = element.getBoundingClientRect();
-        // 创建透明覆盖层
+        // Create overlay element
         const overlay = document.createElement('div');
         overlay.className = 'cleverfiller-hover-overlay';
-        // 设置样式 - 完全透明
         // Position and size - adding padding to make it easier to click
         overlay.style.position = 'absolute';
         overlay.style.top = `${rect.top + window.scrollY - 5}px`; // 5px padding on top
@@ -210,11 +208,10 @@ function hover_overlay_handler(elements) {
             overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
             overlay.innerHTML = '';
         });
-        // 点击事件
         overlay.addEventListener('click', (e) => {
-            e.stopPropagation(); // 阻止事件冒泡
-            overlay.remove(); // 移除覆盖层
-            enlist_element(element); // 调用函数处理点击事件
+            e.stopPropagation(); // Prevent event bubbling
+            overlay.remove(); // Remove the overlay on click
+            enlist_element(element); // Enlist the element
         });
         document.body.appendChild(overlay);
     }
@@ -225,26 +222,26 @@ function enlist_element(element) {
     let attributeValues = get_element_attributes(element);
     // 定义需要排除的属性列表
     const excludeAttributes = [
-        'style', // 样式可能会变化
-        'class', // 类可能会变化
-        'value', // 输入的值会变化
-        'tabindex', // 标签索引可能会变化
-        'disabled', // 禁用状态可能会变化
-        'readonly', // 只读状态可能会变化
-        'autocomplete', // 自动完成设置不影响元素标识
-        'placeholder', // 占位符文本不影响元素标识
-        'aria-checked', // 可访问性状态可能会变化
+        'style',
+        'class',
+        'value',
+        'tabindex',
+        'disabled',
+        'readonly',
+        'autocomplete',
+        'placeholder',
+        'aria-checked',
         'aria-selected',
         'aria-expanded',
         'aria-pressed',
     ];
-    // 排除所有不需要的属性
+    // Exclude the specified attributes from the attributeValues object
     excludeAttributes.forEach(attr => {
         if (attr in attributeValues) {
             delete attributeValues[attr];
         }
     });
-    // 排除所有以 'data-' 开头的动态属性
+    // exclude all attributes that start with 'data-'
     Object.keys(attributeValues).forEach(key => {
         if (key.startsWith('data-')) {
             delete attributeValues[key];
@@ -252,9 +249,9 @@ function enlist_element(element) {
     });
     const url = get_window_url();
     const labelText = get_label_text(element);
-    // 创建元素签名用于比较
+    // create a unique signature for the element
     const elementSignature = `${url}|${labelText}|${JSON.stringify(attributeValues)}`;
-    // 检查元素是否已经存在，防止重复
+    // Check if the element already exists in the array
     const alreadyExists = EnlistArray.some(item => {
         const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
         return itemSignature === elementSignature;
@@ -267,7 +264,7 @@ function enlist_element(element) {
         };
         EnlistArray.push(data);
         ElementCache.push(element); // Add the element to the cache
-        // GM_setValue('enlist', EnlistArray); // 将更新的数组保存到存储中 (取消注释)
+        // GM_setValue('enlist', EnlistArray);
         console.log('Enlisted element:', data);
     }
 }
@@ -309,12 +306,15 @@ function createUI() {
     heading.textContent = `${get_app_info().name}`;
     const api_input = container.querySelector('#cf-api-input');
     api_input.value = GM_getValue('api', '');
+    // don't show the complete api key in the input field
     const model_option = container.querySelector('#cf-model-select');
     model_option.value = GM_getValue('model', 'deepseek-chat');
     const version = container.querySelector('#cf-version-info');
     version.textContent = `version: ${get_app_info().version}`;
     const context_input = container.querySelector('#cf-context-textarea');
     context_input.value = GM_getValue('context', '');
+    const loadingText = cleverfiller_container.querySelector('#cf-console-log');
+    loadingText.textContent = 'Press Alt + S to show panel';
     function activate_clever_filler_display(event) {
         if (event.altKey && (event.key.toLowerCase() === 's')) {
             event.preventDefault();
