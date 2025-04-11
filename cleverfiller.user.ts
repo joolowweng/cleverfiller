@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.6
+// @version      1.2.7
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -322,8 +322,6 @@ function createUI(): void {
         submit_button.addEventListener('click', async () => {
             // Get elements for animation
             const loadingText = cleverfiller_container.querySelector('#loading-text') as HTMLElement;
-
-            loadingText.style.display = 'inline-block';
             submit_button.disabled = true;
 
             // Save settings (with a small delay to see the animation)
@@ -341,7 +339,9 @@ function createUI(): void {
                     loadingText.style.color = '#4a90e2';
                     submit_button.disabled = false;
                 }, 100);
+
             }, 100);  // Short delay to make the animation visible
+            loadingText.textContent = '';
         });
 
     }, 500);
