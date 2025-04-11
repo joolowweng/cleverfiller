@@ -16,10 +16,8 @@
             <div class="cf-input-field"></div>
             <label for="model">Model</label>
             <select id="model">
-                <option ${GM_getValue('model', 'deepseek-chat' )==='deepseek-chat' ? 'selected' : '' }
-                    value="deepseek-chat">DeepSeek Chat</option>
-                <option ${GM_getValue('model', 'deepseek-reasoner' )==='deepseek-reasoner' ? 'selected' : '' }
-                    value="deepseek-reasoner">DeepSeek Reasoner</option>
+                <option value="deepseek-chat">DeepSeek Chat</option>
+                <option value="deepseek-reasoner">DeepSeek Reasoner</option>
             </select>
         </div>
 
@@ -36,7 +34,7 @@
         <div class="cf-toggle-field">
             <label for="ai">Enable AI Parsing</label>
             <label class="switch">
-                <input ${GM_getValue('ai', false) ? 'checked' : '' } type="checkbox" id="ai">
+                <input type="checkbox" id="ai">
                 <span class="slider"></span>
             </label>
         </div>
@@ -57,7 +55,6 @@
     <div class="cf-version">
         <span id="cf-version-info"></span>
     </div>
-</div>
 </div>
 <style>
     #cleverfiller-container {
