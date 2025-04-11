@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.3
+// @version      1.2.4
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -28,7 +28,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 // 2025-04-11 @ 10:02:49: Modify the logic that includes elements in the list rather than excluding them.
-const InclusionList = GM_getValue('InclusionList', []);
+const EnlistArray = GM_getValue('enlist', []);
 function get_app_info() {
     const script = GM_info.script;
     const name = script.name;
@@ -162,36 +162,6 @@ function get_label_text(element) {
     }
     return labelText; // Return the label text
 }
-function* include_elements(elements, exceptionList) {
-    var _a;
-    for (const element of Array.from(elements)) {
-        // get the attributes and values of the element
-        const attributes = element.attributes;
-        const attributeValues = {};
-        for (let i = 0; i < attributes.length; i++) {
-            const attr = attributes[i];
-            attributeValues[attr.name] = attr.value;
-        }
-        // get the Label Text of the element
-        const parentDiv = element.closest('div');
-        let labelText = parentDiv ? ((_a = parentDiv.querySelector('label')) === null || _a === void 0 ? void 0 : _a.textContent) || '' : ''; // Get the label text
-        if (labelText === '') {
-            // Look for the parent <tr> element to find the sibling <td> element
-            const parentTr = element.closest('tr');
-            const siblingTd = parentTr ? parentTr.querySelector('td') : null;
-            labelText = siblingTd ? siblingTd.textContent || '' : '';
-        }
-        // check if attributeValues is in the exception list
-        for (const exception of exceptionList) {
-            for (const [key, value] of Object.entries(exception)) {
-                if (attributeValues[key] === value) {
-                    continue;
-                }
-            }
-        }
-        yield [element, labelText];
-    }
-}
 // Load form data once and fill the inputs
 function fillForm(filteredElements, data = []) {
     var _a;
@@ -201,21 +171,6 @@ function fillForm(filteredElements, data = []) {
         element.value = ((_a = data[index]) === null || _a === void 0 ? void 0 : _a.value) || ''; // Fill the input element with the value from data
         index++; // Increment index for the next input element
     }
-}
-// Function to add new exception to the exception list
-function addException(exception) {
-    // Check if the exception is already in the list
-    const existingException = InclusionList.find((item) => {
-        return Object.entries(exception).every(([key, value]) => item[key] === value);
-    });
-    if (existingException) {
-        console.log('Exception already exists in the list:', exception);
-        return;
-    }
-    // Add the new exception to the list
-    InclusionList.push(exception);
-    // Save the updated exception list to Tampermonkey storage
-    GM_setValue('EscapeList', InclusionList);
 }
 // 2025.04.11: Tweaked style of highlighted elements.
 function highlight_form_elements(elements) {
@@ -229,7 +184,7 @@ function highlight_form_elements(elements) {
         element.placeholder = 'CleverFiller takes over';
     }
 }
-function hover_overlay_handler(elements, event_handler) {
+function hover_overlay_handler(elements) {
     for (const element of Array.from(elements)) {
         // 获取元素位置
         const rect = element.getBoundingClientRect();
@@ -237,29 +192,56 @@ function hover_overlay_handler(elements, event_handler) {
         const overlay = document.createElement('div');
         overlay.className = 'cleverfiller-hover-overlay';
         // 设置样式 - 完全透明
+        // Position and size - adding padding to make it easier to click
         overlay.style.position = 'absolute';
-        overlay.style.top = `${rect.top + window.scrollY}px`;
-        overlay.style.left = `${rect.left}px`;
-        overlay.style.width = `${rect.width}px`;
-        overlay.style.height = `${rect.height}px`;
+        overlay.style.top = `${rect.top + window.scrollY - 5}px`; // 5px padding on top
+        overlay.style.left = `${rect.left - 5}px`; // 5px padding on left
+        overlay.style.width = `${rect.width + 10}px`; // Add 10px total width (5px on each side)
+        overlay.style.height = `${rect.height + 10}px`; // Add 10px total height (5px on each side)
         overlay.style.zIndex = '999';
-        overlay.style.backgroundColor = 'transparent';
+        overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)'; // Slight background for better visibility
         overlay.style.cursor = 'pointer';
         overlay.style.border = '2px dashed transparent';
-        // 悬停效果 - 只在悬停时显示边框
+        overlay.style.boxSizing = 'border-box'; // Ensure padding doesn't affect overall size
+        // Hover effects - improved visibility
         overlay.addEventListener('mouseover', () => {
             overlay.style.border = '2px dashed #4a90e2';
-            overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.7); color: white; font-size: 12px; padding: 2px;">Select</div>';
+            overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.2)'; // More noticeable on hover
+            overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Select</div>';
         });
         overlay.addEventListener('mouseout', () => {
             overlay.style.border = '2px dashed transparent';
+            overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
             overlay.innerHTML = '';
         });
         // 点击事件
-        if (event_handler) {
-            overlay.addEventListener('click', event_handler); // Attach the event handler if provided
-        }
+        overlay.addEventListener('click', (e) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            overlay.remove(); // 移除覆盖层
+            enlist_element(element); // 调用函数处理点击事件
+        });
         document.body.appendChild(overlay);
+    }
+}
+function enlist_element(element) {
+    // Generate a unique identifier for this element to prevent duplicates
+    const attributeValues = get_element_attributes(element);
+    const url = get_window_url();
+    const labelText = get_label_text(element);
+    // Create an element signature for comparison
+    const elementSignature = `${url}|${labelText}|${JSON.stringify(attributeValues)}`;
+    // Check if element is already enlisted to prevent duplicates
+    const alreadyExists = EnlistArray.some(item => {
+        const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
+        return itemSignature === elementSignature;
+    });
+    if (!alreadyExists) {
+        const data = {
+            url: url,
+            labelText: labelText,
+            attributeValues: attributeValues
+        };
+        console.log('Enlisted element:', data);
     }
 }
 function get_window_url() {
