@@ -278,6 +278,10 @@
         align-items: center;
         margin-top: 16px;
         justify-content: center;
+        min-height: 30px;
+        /* 添加最小高度 */
+        position: relative;
+        /* 为绝对定位子元素准备 */
     }
 
     #cf-spinner {
@@ -287,10 +291,22 @@
     }
 
     #cf-console-log {
-        display: inline-block;
+        display: block;
         margin-left: 10px;
         color: #4a90e2;
         font-size: 14px;
+        min-height: 20px;
+        /* 固定最小高度 */
+        line-height: 20px;
+        /* 固定行高 */
+        width: 200px;
+        /* 固定宽度 */
+        text-align: center;
+        /* 文本居中 */
+        overflow: hidden;
+        /* 防止内容溢出 */
+        transition: color 0.3s ease;
+        /* 添加颜色过渡效果 */
     }
 
     .cf-version {
