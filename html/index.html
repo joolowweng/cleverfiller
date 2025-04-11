@@ -36,10 +36,10 @@
     </div>
 
     <div class="cf-loading">
-        <svg id="spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <svg id="cf-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none" stroke-dasharray="60 30" />
         </svg>
-        <span id="loading-text">Processing...</span>
+        <span id="cf-console-log"></span>
     </div>
 
     <div class="cf-button-group">
@@ -280,14 +280,14 @@
         justify-content: center;
     }
 
-    #spinner {
+    #cf-spinner {
         display: none;
         width: 24px;
         height: 24px;
     }
 
-    #loading-text {
-        display: none;
+    #cf-console-log {
+        display: flex;
         margin-left: 10px;
         color: #4a90e2;
         font-size: 14px;
