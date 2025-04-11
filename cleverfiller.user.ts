@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.11
+// @version      1.3.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -22,7 +22,7 @@
 'use strict';
 
 // 2025-04-11 @ 10:02:49: Modify the logic that includes elements in the list rather than excluding them.
-const EnlistArray: Array<Record<string, any>> = GM_getValue('enlist', []);
+const EnlistArray: Array<Record<string, any>> = [];
 const ElementCache: HTMLElement[] = [];
 
 function get_app_info(): { name: string; version: string } {
@@ -30,9 +30,7 @@ function get_app_info(): { name: string; version: string } {
     const script = GM_info.script;
     const name = script.name;
     const version = script.version;
-
     return { name, version };
-
 }
 
 async function get_response<T>(options: Tampermonkey.Request<any>, on_start?: () => void): Promise<T | string> {
@@ -119,17 +117,16 @@ function create_prompt(context: string, formData: Array<Record<string, unknown>>
     return prompt;
 }
 
-function parse_ai_response(response: any): Array<Record<string, unknown>> {
+function parse_ai_response(response: any): string {
     try {
         const msg_content = response?.choices?.[0]?.message?.content;
         if (!msg_content) {
             throw new Error('Invalid API response format')
         }
-        const cleanStringData = msg_content.substring(msg_content.indexOf('['), msg_content.lastIndexOf(']') + 1);
-        return JSON.parse(cleanStringData);
+        return msg_content.trim();
     } catch (error) {
         console.error('Failed to parse API response:', error);
-        return [];
+        return '';
     }
 }
 
@@ -230,10 +227,8 @@ function hover_overlay_handler(elements: NodeListOf<HTMLInputElement>): void {
     }
 }
 
-
 function enlist_element(element: HTMLElement): void {
     // Cache the enlisted HTML element in the array
-
     // Generate a unique identifier for this element to prevent duplicates
     let attributeValues = get_element_attributes(element as HTMLElement);
 
@@ -287,7 +282,7 @@ function enlist_element(element: HTMLElement): void {
         };
         EnlistArray.push(data);
         ElementCache.push(element); // Add the element to the cache
-        GM_setValue('enlist', EnlistArray); // 将更新的数组保存到存储中 (取消注释)
+        // GM_setValue('enlist', EnlistArray); // 将更新的数组保存到存储中 (取消注释)
         console.log('Enlisted element:', data);
     }
 }
@@ -305,6 +300,19 @@ function get_element_attributes(element: HTMLElement): { [key: string]: string }
         attributeValues[attr.name] = attr.value;
     }
     return attributeValues; // Return the attribute values as an object
+}
+
+function fill_form(element: HTMLElement, value: string): void {
+    // Fill the form element with the value
+    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+        (element as HTMLInputElement).value = value;
+    } else if (element.tagName === 'SELECT') {
+        const selectElement = element as HTMLSelectElement;
+        const optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
+        if (optionToSelect) {
+            selectElement.value = optionToSelect.value;
+        }
+    }
 }
 
 // 2025-04-11 @ 11:28:50: Extracted the HTML to a separate file for better maintainability.
@@ -338,6 +346,7 @@ function createUI(): void {
     const hide_button = cleverfiller_container.querySelector('#cf-hide-button') as HTMLButtonElement;
     const hightlight_button = cleverfiller_container.querySelector('#cf-enlist-button') as HTMLButtonElement;
     const submit_button = cleverfiller_container.querySelector('#cf-submit-button') as HTMLButtonElement;
+    const run_button = cleverfiller_container.querySelector('#cf-run-button') as HTMLButtonElement;
 
     setTimeout(() => {
 
@@ -371,12 +380,100 @@ function createUI(): void {
                 loadingText.style.color = '#4CAF50'; // Green color for success
                 loadingText.textContent = 'Saved';
 
-                // Clear the message after 2 seconds
+                // Clear the message after .5 seconds
                 setTimeout(() => {
                     loadingText.textContent = ''; // Clear text
                     submit_button.disabled = false;
-                }, 500);
-            }, 500);  // Short delay to make the animation visible
+                }, 1000);
+            }, 1000);  // Short delay to make the animation visible
+        });
+
+        run_button.addEventListener('click', async () => {
+            // Get elements for animation
+            const loadingText = cleverfiller_container.querySelector('#cf-console-log') as HTMLElement;
+
+            // Disable the button while processing
+            run_button.disabled = true;
+
+            // Validate settings
+            if (api_input.value === '' || context_input.value === '') {
+                loadingText.textContent = 'Incorrect API or empty context';
+                loadingText.style.color = '#f44336'; // Red color for error
+
+                setTimeout(() => {
+                    loadingText.textContent = '';
+                    run_button.disabled = false;
+                }, 2000);
+                return;
+            }
+
+            // Check if elements are available
+            if (ElementCache.length === 0) {
+                loadingText.textContent = 'No form elements selected. Click Enlist first.';
+                loadingText.style.color = '#ff9800'; // Warning color
+
+                setTimeout(() => {
+                    loadingText.textContent = '';
+                    run_button.disabled = false;
+                }, 2000);
+                return;
+            }
+
+            // Show initial count
+            loadingText.textContent = `Preparing to fill ${ElementCache.length} form fields...`;
+            loadingText.style.color = '#4a90e2'; // Blue color for loading
+
+            // Short delay so user can see the initial count
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            try {
+                // Show loading indicators for all fields
+                for (let i = 0; i < ElementCache.length; i++) {
+                    const element = ElementCache[i] as HTMLInputElement;
+                    element.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                    element.style.border = '2px solid #4a90e2';
+                }
+
+                // Process each field with AI
+                for (let i = 0; i < ElementCache.length; i++) {
+                    const element = ElementCache[i] as HTMLInputElement;
+                    const enlisted_element = EnlistArray[i].attributeValues;
+
+                    // Update console with current field
+                    loadingText.textContent = `Processing field ${i + 1}/${ElementCache.length}...`;
+
+                    try {
+                        const prompt = create_prompt(context_input.value, enlisted_element);
+
+                        // Show specific field information
+                        if (element.id || element.name) {
+                            loadingText.textContent = `Processing ${element.id || element.name} (${i + 1}/${ElementCache.length})...`;
+                        }
+                        console.log('[CleverFiller] Prompt:', prompt);
+
+                        const response = await call_deepseek_api(prompt);
+                        const fieldValue = parse_ai_response(response);
+                        console.log('[CleverFiller] Field Value:', fieldValue);
+                        fill_form(element, fieldValue); // Fill the form element with the value
+
+                    } catch (fieldError) {
+                        // Error handling remains the same...
+                    }
+                }
+
+                // Show success
+            } catch (error) {
+                // Handle errors
+                console.error('Error filling form:', error);
+                loadingText.textContent = 'Check the console for errors.';
+                loadingText.style.color = '#f44336'; // Red for error
+            } finally {
+                // Always re-enable the button and clear message after delay
+                setTimeout(() => {
+                    run_button.disabled = false;
+                    loadingText.textContent = '';
+                }, 1000);
+            }
         });
 
     }, 500);

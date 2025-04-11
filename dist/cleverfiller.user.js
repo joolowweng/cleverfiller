@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller Beta
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.2.11
+// @version      1.3.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -29,7 +29,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 // 2025-04-11 @ 10:02:49: Modify the logic that includes elements in the list rather than excluding them.
-const EnlistArray = GM_getValue('enlist', []);
+const EnlistArray = [];
 const ElementCache = [];
 function get_app_info() {
     const script = GM_info.script;
@@ -127,12 +127,11 @@ function parse_ai_response(response) {
         if (!msg_content) {
             throw new Error('Invalid API response format');
         }
-        const cleanStringData = msg_content.substring(msg_content.indexOf('['), msg_content.lastIndexOf(']') + 1);
-        return JSON.parse(cleanStringData);
+        return msg_content.trim();
     }
     catch (error) {
         console.error('Failed to parse API response:', error);
-        return [];
+        return '';
     }
 }
 // 2025.04.11: Fixed the issue where the script was not able to find the form elements correctly.
@@ -268,7 +267,7 @@ function enlist_element(element) {
         };
         EnlistArray.push(data);
         ElementCache.push(element); // Add the element to the cache
-        GM_setValue('enlist', EnlistArray); // 将更新的数组保存到存储中 (取消注释)
+        // GM_setValue('enlist', EnlistArray); // 将更新的数组保存到存储中 (取消注释)
         console.log('Enlisted element:', data);
     }
 }
@@ -284,6 +283,19 @@ function get_element_attributes(element) {
         attributeValues[attr.name] = attr.value;
     }
     return attributeValues; // Return the attribute values as an object
+}
+function fill_form(element, value) {
+    // Fill the form element with the value
+    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+        element.value = value;
+    }
+    else if (element.tagName === 'SELECT') {
+        const selectElement = element;
+        const optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
+        if (optionToSelect) {
+            selectElement.value = optionToSelect.value;
+        }
+    }
 }
 // 2025-04-11 @ 11:28:50: Extracted the HTML to a separate file for better maintainability.
 function createUI() {
@@ -313,6 +325,7 @@ function createUI() {
     const hide_button = cleverfiller_container.querySelector('#cf-hide-button');
     const hightlight_button = cleverfiller_container.querySelector('#cf-enlist-button');
     const submit_button = cleverfiller_container.querySelector('#cf-submit-button');
+    const run_button = cleverfiller_container.querySelector('#cf-run-button');
     setTimeout(() => {
         hide_button.addEventListener('click', () => {
             cleverfiller_container.style.display = 'none';
@@ -338,12 +351,87 @@ function createUI() {
                 // Show success state
                 loadingText.style.color = '#4CAF50'; // Green color for success
                 loadingText.textContent = 'Saved';
-                // Clear the message after 2 seconds
+                // Clear the message after .5 seconds
                 setTimeout(() => {
                     loadingText.textContent = ''; // Clear text
                     submit_button.disabled = false;
-                }, 500);
-            }, 500); // Short delay to make the animation visible
+                }, 1000);
+            }, 1000); // Short delay to make the animation visible
+        }));
+        run_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
+            // Get elements for animation
+            const loadingText = cleverfiller_container.querySelector('#cf-console-log');
+            // Disable the button while processing
+            run_button.disabled = true;
+            // Validate settings
+            if (api_input.value === '' || context_input.value === '') {
+                loadingText.textContent = 'Incorrect API or empty context';
+                loadingText.style.color = '#f44336'; // Red color for error
+                setTimeout(() => {
+                    loadingText.textContent = '';
+                    run_button.disabled = false;
+                }, 2000);
+                return;
+            }
+            // Check if elements are available
+            if (ElementCache.length === 0) {
+                loadingText.textContent = 'No form elements selected. Click Enlist first.';
+                loadingText.style.color = '#ff9800'; // Warning color
+                setTimeout(() => {
+                    loadingText.textContent = '';
+                    run_button.disabled = false;
+                }, 2000);
+                return;
+            }
+            // Show initial count
+            loadingText.textContent = `Preparing to fill ${ElementCache.length} form fields...`;
+            loadingText.style.color = '#4a90e2'; // Blue color for loading
+            // Short delay so user can see the initial count
+            yield new Promise(resolve => setTimeout(resolve, 800));
+            try {
+                // Show loading indicators for all fields
+                for (let i = 0; i < ElementCache.length; i++) {
+                    const element = ElementCache[i];
+                    element.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                    element.style.border = '2px solid #4a90e2';
+                }
+                // Process each field with AI
+                for (let i = 0; i < ElementCache.length; i++) {
+                    const element = ElementCache[i];
+                    const enlisted_element = EnlistArray[i].attributeValues;
+                    // Update console with current field
+                    loadingText.textContent = `Processing field ${i + 1}/${ElementCache.length}...`;
+                    try {
+                        const prompt = create_prompt(context_input.value, enlisted_element);
+                        // Show specific field information
+                        if (element.id || element.name) {
+                            loadingText.textContent = `Processing ${element.id || element.name} (${i + 1}/${ElementCache.length})...`;
+                        }
+                        console.log('[CleverFiller] Prompt:', prompt);
+                        const response = yield call_deepseek_api(prompt);
+                        const fieldValue = parse_ai_response(response);
+                        console.log('[CleverFiller] Field Value:', fieldValue);
+                        fill_form(element, fieldValue); // Fill the form element with the value
+                    }
+                    catch (fieldError) {
+                        // Error handling remains the same...
+                    }
+                }
+                // Show success
+            }
+            catch (error) {
+                // Handle errors
+                console.error('Error filling form:', error);
+                loadingText.textContent = 'Check the console for errors.';
+                loadingText.style.color = '#f44336'; // Red for error
+            }
+            finally {
+                // Always re-enable the button and clear message after delay
+                setTimeout(() => {
+                    run_button.disabled = false;
+                    loadingText.textContent = '';
+                }, 1000);
+            }
         }));
     }, 500);
 }
