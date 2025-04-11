@@ -322,7 +322,7 @@ function createUI(): void {
     container.innerHTML = container_html;
     document.body.appendChild(container);
     const cleverfiller_container = container.querySelector('#cleverfiller-container') as HTMLDivElement;
-
+    cleverfiller_container.style.display = 'block';
     const heading = container.querySelector('#cf-app-name') as HTMLHeadingElement;
     heading.textContent = `${get_app_info().name}`;
     const api_input = container.querySelector('#cf-api-input') as HTMLInputElement;
