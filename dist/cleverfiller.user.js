@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.4.0
+// @version      1.4.1
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -160,7 +160,7 @@ function highlight_form_elements(elements) {
 }
 function hover_overlay_handler(elements) {
     // Clear existing overlays if any
-    const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay');
+    const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove');
     existingOverlays.forEach(overlay => overlay.remove());
     for (const element of Array.from(elements)) {
         // See if the element is already enlisted
