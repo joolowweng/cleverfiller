@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.3.5
+// @version      1.4.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -175,19 +175,52 @@ function hover_overlay_handler(elements: NodeListOf<HTMLInputElement>): void {
 
             if (elementSignature === enlistedSignature) {
                 isAlreadyEnlisted = true;
-                break; // 找到匹配项，退出内部循环
+                break;
             }
         }
 
-        // If the element is already enlisted, skip it
+        // If the element is already enlisted, create a remove hover overlay
         if (isAlreadyEnlisted) {
+            // Create a hover overlay for the element
+            const rect: DOMRect = element.getBoundingClientRect();
+            const overlay: HTMLDivElement = document.createElement('div');
+            overlay.className = 'cleverfiller-hover-overlay-remove';
+            // Hover overlay styles for removing elements
+            overlay.style.position = 'absolute';
+            overlay.style.top = `${rect.top + window.scrollY - 5}px`;
+            overlay.style.left = `${rect.left - 5}px`;
+            overlay.style.width = `${rect.width + 10}px`;
+            overlay.style.height = `${rect.height + 10}px`;
+            overlay.style.zIndex = '999';
+            overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+            overlay.style.cursor = 'pointer';
+            overlay.style.border = '2px dashed transparent';
+            overlay.style.boxSizing = 'border-box';
+
+            // Hover overlay event listeners for removing elements
+            overlay.addEventListener('mouseover', () => {
+                overlay.style.border = '2px dashed #f44336';
+                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
+                overlay.innerHTML = '<div style="background: rgba(244, 67, 54, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Remove</div>';
+            });
+            overlay.addEventListener('mouseout', () => {
+                overlay.style.border = '2px dashed transparent';
+                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+                overlay.innerHTML = '';
+            });
+            overlay.addEventListener('click', (e: MouseEvent) => {
+                e.stopPropagation();
+                overlay.remove();
+                remove_enlist_element(element);
+            });
+            document.body.appendChild(overlay);
             continue;
         }
 
         // Create a hover overlay for the element
         const rect: DOMRect = element.getBoundingClientRect();
         const overlay: HTMLDivElement = document.createElement('div');
-        overlay.className = 'cleverfiller-hover-overlay';
+        overlay.className = 'cleverfiller-hover-overlay-add';
 
         // Hover overlay styles for selecting elements
         overlay.style.position = 'absolute';
@@ -350,11 +383,10 @@ function remove_enlist_element(element: HTMLElement): void {
         GM_setValue('enlist', EnlistArray); // Update the storage
     }
 }
-// 2025-04-12 @ 01:34:38: Added a function to generate enlist data for the element.
+// Extract data to create the enlist object
 function extract_data_for_enlist_storage(element: HTMLElement): Record<string, any> {
     const url = get_window_url();
     const labelText = get_label_text(element as HTMLInputElement);
-    // 使用 exemplify_attribute_values 而不是 get_element_attributes
     const attributeValues = filter_redundant_attributes(element);
     const data = {
         url: url,
