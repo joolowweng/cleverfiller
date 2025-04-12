@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.3.4
+// @version      1.3.5
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -159,35 +159,30 @@ function highlight_form_elements(elements) {
     }
 }
 function hover_overlay_handler(elements) {
-    // 首先清除现有的覆盖层，避免重叠
+    // Clear existing overlays if any
     const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay');
     existingOverlays.forEach(overlay => overlay.remove());
     for (const element of Array.from(elements)) {
-        // 生成当前元素的属性（已过滤掉不需要的属性）
-        const attributes = filter_redundant_attributes(element);
-        // 检查元素是否已在 EnlistArray 中存在
+        // See if the element is already enlisted
+        const elementSignature = create_element_signature(element);
         let isAlreadyEnlisted = false;
-        // 创建元素签名用于比较
-        const url = get_window_url();
-        const labelText = get_label_text(element);
-        const elementSignature = `${url}|${labelText}|${JSON.stringify(attributes)}`;
         for (const enlistedElement of EnlistArray) {
-            // 为已存储元素创建相同格式的签名
+            // Compare the signatures of the enlisted elements with the current element
             const enlistedSignature = `${enlistedElement.url}|${enlistedElement.labelText}|${JSON.stringify(enlistedElement.attributeValues)}`;
             if (elementSignature === enlistedSignature) {
                 isAlreadyEnlisted = true;
                 break; // 找到匹配项，退出内部循环
             }
         }
-        // 如果元素已经存在，则跳过当前元素
+        // If the element is already enlisted, skip it
         if (isAlreadyEnlisted) {
-            continue; // 使用 continue 而不是 return，只跳过当前元素
+            continue;
         }
-        // 创建并添加覆盖层的代码（保留现有代码）
+        // Create a hover overlay for the element
         const rect = element.getBoundingClientRect();
         const overlay = document.createElement('div');
         overlay.className = 'cleverfiller-hover-overlay';
-        // 设置覆盖层样式（保留您的现有代码）
+        // Hover overlay styles for selecting elements
         overlay.style.position = 'absolute';
         overlay.style.top = `${rect.top + window.scrollY - 5}px`;
         overlay.style.left = `${rect.left - 5}px`;
@@ -198,7 +193,7 @@ function hover_overlay_handler(elements) {
         overlay.style.cursor = 'pointer';
         overlay.style.border = '2px dashed transparent';
         overlay.style.boxSizing = 'border-box';
-        // 事件监听器（保留您的现有代码）
+        // Hover overlay event listeners for selecting elements
         overlay.addEventListener('mouseover', () => {
             overlay.style.border = '2px dashed #4a90e2';
             overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.2)';
@@ -293,16 +288,25 @@ function filter_redundant_attributes(element) {
     });
     return attributeValues; // Return the attribute values as an object
 }
-// Store the element to the EnlistArray(disk-cache) and ElementCache(runtime-cache)
-function enlist_element(element) {
-    const extracted_enlist_data = extract_data_for_enlist_storage(element);
+function create_element_signature(element) {
     // Create a unique signature for the element to prevent duplicates
-    const elementSignature = `${extracted_enlist_data.url}|${extracted_enlist_data.labelText}|${JSON.stringify(extracted_enlist_data.attributeValues)}`;
+    const url = get_window_url();
+    const labelText = get_label_text(element);
+    const attributeValues = filter_redundant_attributes(element);
+    return `${url}|${labelText}|${JSON.stringify(attributeValues)}`;
+}
+function check_if_element_exists_in_enlist_array(element) {
     // Check if the element already exists in the EnlistArray
-    const alreadyExists = EnlistArray.some(item => {
+    const elementSignature = create_element_signature(element);
+    return EnlistArray.some(item => {
         const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
         return itemSignature === elementSignature;
     });
+}
+// Store the element to the EnlistArray(disk-cache) and ElementCache(runtime-cache)
+function enlist_element(element) {
+    const extracted_enlist_data = extract_data_for_enlist_storage(element);
+    const alreadyExists = check_if_element_exists_in_enlist_array(element);
     if (!alreadyExists) {
         EnlistArray.push(extracted_enlist_data);
         ElementCache.push(element);
