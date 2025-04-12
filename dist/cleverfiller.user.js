@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.4.2
+// @version      1.4.3
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -412,6 +412,7 @@ function createUI() {
     const enlist_button = cleverfiller_container.querySelector('#cf-enlist-button');
     const submit_button = cleverfiller_container.querySelector('#cf-submit-button');
     const run_button = cleverfiller_container.querySelector('#cf-run-button');
+    const reset_button = cleverfiller_container.querySelector('#cf-reset-button');
     setTimeout(() => {
         // Hide button: header button to hide the panel
         hide_button.addEventListener('click', () => {
@@ -449,6 +450,15 @@ function createUI() {
                 }, 1000);
             }, 1000); // Short delay to make the animation visible
         }));
+        reset_button.addEventListener('click', () => {
+            //reset EnlistArray for current window url and ElementCache
+            EnlistArray.length = 0;
+            ElementCache.length = 0;
+            GM_setValue(get_window_url(), EnlistArray);
+            // Clear the enlist elements in the UI
+            const enlistElements = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove');
+            enlistElements.forEach(element => element.remove());
+        });
         // Run button: AI logic to fill the form fields
         run_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
             const loadingText = cleverfiller_container.querySelector('#cf-console-log');
