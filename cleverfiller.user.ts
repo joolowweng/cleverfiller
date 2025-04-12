@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.4.1
+// @version      1.4.2
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -22,7 +22,7 @@
 'use strict';
 
 // EnlistArray: Array to store enlisted elements
-const EnlistArray: Array<Record<string, any>> = GM_getValue('enlist', []);
+const EnlistArray: Array<Record<string, any>> = GM_getValue(get_window_url(), []);
 // ElementCache: Array to store the fillable elements that are currently in the DOM
 const ElementCache: HTMLElement[] = [];
 
@@ -171,7 +171,7 @@ function hover_overlay_handler(elements: NodeListOf<HTMLInputElement>): void {
         for (const enlistedElement of EnlistArray) {
 
             // Compare the signatures of the enlisted elements with the current element
-            const enlistedSignature = `${enlistedElement.url}|${enlistedElement.labelText}|${JSON.stringify(enlistedElement.attributeValues)}`;
+            const enlistedSignature = create_element_signature(enlistedElement);
 
             if (elementSignature === enlistedSignature) {
                 isAlreadyEnlisted = true;
@@ -317,11 +317,6 @@ function filter_redundant_attributes(element: HTMLElement): Record<string, strin
         'tabindex',
         'disabled',
         'readonly',
-        'autocomplete',
-        'aria-checked',
-        'aria-selected',
-        'aria-expanded',
-        'aria-pressed',
     ];
     // Exclude the specified attributes from the attributeValues object
     excludeAttributes.forEach(attr => {
@@ -334,23 +329,33 @@ function filter_redundant_attributes(element: HTMLElement): Record<string, strin
         if (key.startsWith('data-')) {
             delete attributeValues[key];
         }
+        if (key.startsWith('aria-')) {
+            delete attributeValues[key];
+        }
     });
     return attributeValues; // Return the attribute values as an object
 }
 
-function create_element_signature(element: HTMLElement): string {
+function create_element_signature(element: HTMLElement | Record<string, any>): string {
     // Create a unique signature for the element to prevent duplicates
-    const url = get_window_url();
-    const labelText = get_label_text(element as HTMLInputElement);
-    const attributeValues = filter_redundant_attributes(element);
-    return `${url}|${labelText}|${JSON.stringify(attributeValues)}`;
+    if (element && element instanceof HTMLElement) {
+
+        const labelText = get_label_text(element as HTMLInputElement);
+        const attributeValues = filter_redundant_attributes(element);
+        return `${labelText}|${JSON.stringify(attributeValues)}`;
+    }
+    if (element && typeof element === 'object') {
+        return `${element.labelText}|${JSON.stringify(element.attributeValues)}`;
+    }
+    // Default case - return an empty string as fallback
+    return '';
 }
 
 function check_if_element_exists_in_enlist_array(element: HTMLElement): boolean {
     // Check if the element already exists in the EnlistArray
     const elementSignature = create_element_signature(element);
     return EnlistArray.some(item => {
-        const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
+        const itemSignature = create_element_signature(item);
         return itemSignature === elementSignature;
     });
 }
@@ -365,31 +370,29 @@ function enlist_element(element: HTMLElement): void {
     if (!alreadyExists) {
         EnlistArray.push(extracted_enlist_data);
         ElementCache.push(element);
-        GM_setValue('enlist', EnlistArray);
+        GM_setValue(get_window_url(), EnlistArray);
     }
 }
 
 function remove_enlist_element(element: HTMLElement): void {
     // Remove the element from the EnlistArray and ElementCache
-    const extracted_enlist_data = extract_data_for_enlist_storage(element);
-    const elementSignature = `${extracted_enlist_data.url}|${extracted_enlist_data.labelText}|${JSON.stringify(extracted_enlist_data.attributeValues)}`;
+    const elementSignature = create_element_signature(element)
     const index = EnlistArray.findIndex(item => {
-        const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
+        const itemSignature = create_element_signature(item);
         return itemSignature === elementSignature;
     });
     if (index !== -1) {
         EnlistArray.splice(index, 1); // Remove from EnlistArray
         ElementCache.splice(index, 1); // Remove from ElementCache
-        GM_setValue('enlist', EnlistArray); // Update the storage
+        GM_setValue(get_window_url(), EnlistArray); // Update the storage
     }
 }
+
 // Extract data to create the enlist object
 function extract_data_for_enlist_storage(element: HTMLElement): Record<string, any> {
-    const url = get_window_url();
     const labelText = get_label_text(element as HTMLInputElement);
     const attributeValues = filter_redundant_attributes(element);
     const data = {
-        url: url,
         labelText: labelText,
         attributeValues: attributeValues
     };
