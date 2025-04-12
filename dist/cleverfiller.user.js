@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.4.4
+// @version      2.0.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -15,7 +15,7 @@
 // @grant        GM_getResourceText
 // @grant        GM_getResourceURL
 // @grant        GM_info
-// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html
+// @resource     index file:///C:/Users/Yikai/.github/cleverfiller/html/index.html
 // @run-at       document-start
 // ==/UserScript==
 'use strict';
@@ -33,7 +33,7 @@ const EnlistArray = GM_getValue(get_window_url(), []);
 // ElementCache: Array to store the fillable elements that are currently in the DOM
 const ElementCache = [];
 // General Utility Functions
-// --------------------------------------------------------
+// -----------------------------------------------------------
 function get_app_info() {
     const script = GM_info.script;
     const name = script.name;
@@ -46,7 +46,7 @@ function get_window_url() {
 }
 // -----------------------------------------------------------
 // AI Part
-// -------------------------------------------------------
+// -----------------------------------------------------------
 function get_response(options, on_start) {
     return __awaiter(this, void 0, void 0, function* () {
         // April 9 2025 - Added a callback function to be executed when the request starts.
@@ -144,9 +144,9 @@ function parse_ai_response(response) {
         return '';
     }
 }
-// -------------------------------------------------------
+// -----------------------------------------------------------
 // UI Part
-// -------------------------------------------------------
+// -----------------------------------------------------------
 // 2025.04.11: Tweaked style of highlighted elements.
 function highlight_form_elements(elements) {
     for (const element of Array.from(elements)) {
@@ -158,7 +158,7 @@ function highlight_form_elements(elements) {
         `;
     }
 }
-function hover_overlay_handler(elements) {
+function hover_overlay_handler(elements, workflow_mode) {
     // Clear existing overlays if any
     const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove');
     existingOverlays.forEach(overlay => overlay.remove());
@@ -262,9 +262,9 @@ function fill_form(element, value) {
         }
     }
 }
-// ----------------------------------------------------------
+// -----------------------------------------------------------
 // Core Functionality
-// ----------------------------------------------------------
+// -----------------------------------------------------------
 // 2025.04.11: Fixed the issue where the script was not able to find the form elements correctly.
 function scan_form_elements() {
     const allInputs = document.querySelectorAll('input, textarea, select');
@@ -352,6 +352,7 @@ function enlist_element(element) {
         EnlistArray.push(extracted_enlist_data);
         ElementCache.push(element);
         GM_setValue(get_window_url(), EnlistArray);
+        update_enlist_count();
     }
 }
 function remove_enlist_element(element) {
@@ -365,6 +366,7 @@ function remove_enlist_element(element) {
         EnlistArray.splice(index, 1); // Remove from EnlistArray
         ElementCache.splice(index, 1); // Remove from ElementCache
         GM_setValue(get_window_url(), EnlistArray); // Update the storage
+        update_enlist_count(); // Update the enlist count badge
     }
 }
 // Extract data to create the enlist object
@@ -377,8 +379,70 @@ function extract_data_for_enlist_storage(element) {
     };
     return data;
 }
-// -----------------------------------------------------
-// Main function to create the UI
+// 添加到 createUI 函数中
+function setupTabNavigation(container) {
+    const tabs = container.querySelectorAll('.cf-nav-tab');
+    const tabContentContainer = container.querySelector('#cleverfiller-inner-body');
+    if (!tabContentContainer) {
+        console.error('Tab content container not found');
+        return;
+    }
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // 移除所有活动标签类
+            tabs.forEach(t => t.classList.remove('active'));
+            // 添加活动类到当前标签
+            tab.classList.add('active');
+            // 获取目标标签内容ID
+            const tabName = tab.dataset.tab;
+            const targetId = `cf-tab-${tabName}`;
+            // 记录调试信息
+            console.log(`Switching to tab: ${tabName}, looking for ID: ${targetId}`);
+            // 隐藏所有内容 (限定在内容容器内查询)
+            const contents = tabContentContainer.querySelectorAll('.cf-tab-content');
+            contents.forEach(content => {
+                content.classList.remove('active');
+                console.log(`Removed active from: ${content.id}`);
+            });
+            // 显示对应内容 (限定在内容容器内查询)
+            const targetContent = tabContentContainer.querySelector(`#${targetId}`);
+            if (targetContent) {
+                targetContent.classList.add('active');
+                console.log(`Added active to: ${targetId}`);
+            }
+            else {
+                console.error(`Tab content element not found: #${targetId}`);
+            }
+        });
+    });
+}
+function update_enlist_count() {
+    const countBadge = document.querySelector('#cf-enlist-count');
+    if (countBadge) {
+        if (EnlistArray.length === 0) {
+            countBadge.style.display = 'none'; // Hide the badge if no elements are enlisted
+        }
+        else {
+            countBadge.style.display = 'flex';
+            countBadge.textContent = EnlistArray.length.toString();
+        }
+    }
+}
+function setup_auto_save(container) {
+    const api_input = container.querySelector('#cf-api-input');
+    const model_option = container.querySelector('#cf-model-select');
+    const context_input = container.querySelector('#cf-context-textarea');
+    const workflow_mode = container.querySelector('#cf-workflow-mode');
+    const initial_display = container.querySelector('#cf-initial-display');
+    const save_value = (key, value) => {
+        GM_setValue(key, value);
+    };
+    api_input.addEventListener('input', () => save_value('api', api_input.value));
+    model_option.addEventListener('change', () => save_value('model', model_option.value));
+    context_input.addEventListener('input', () => save_value('context', context_input.value));
+    workflow_mode.addEventListener('change', () => save_value('workflow_mode', workflow_mode.checked));
+    initial_display.addEventListener('change', () => save_value('initial_display', initial_display.checked));
+}
 // 2025-04-11 @ 11:28:50: Extracted the HTML to a separate file for better maintainability.
 function createUI() {
     // Create the container div and set its properties
@@ -387,8 +451,6 @@ function createUI() {
     container.innerHTML = container_html;
     document.body.appendChild(container);
     const cleverfiller_container = container.querySelector('#cleverfiller-container');
-    // Initially show or hide the container
-    cleverfiller_container.style.display = 'block';
     // Get the app name and version from the script metadata
     const heading = container.querySelector('#cf-app-name');
     heading.textContent = `${get_app_info().name}`;
@@ -401,6 +463,17 @@ function createUI() {
     model_option.value = GM_getValue('model', 'deepseek-chat');
     const context_input = container.querySelector('#cf-context-textarea');
     context_input.value = GM_getValue('context', '');
+    const workflow_mode = container.querySelector('#cf-workflow-mode');
+    workflow_mode.checked = GM_getValue('workflow_mode', false);
+    const initial_display = container.querySelector('#cf-initial-display');
+    initial_display.checked = GM_getValue('initial_display', false);
+    // Initially show or hide the container
+    if (initial_display.checked) {
+        cleverfiller_container.style.display = 'block';
+    }
+    else {
+        cleverfiller_container.style.display = 'none';
+    }
     // Set the default loading text
     const loadingText = cleverfiller_container.querySelector('#cf-console-log');
     loadingText.textContent = 'Press Alt + S to show panel';
@@ -415,9 +488,13 @@ function createUI() {
     // Add event listeners to the buttons
     const hide_button = cleverfiller_container.querySelector('#cf-hide-button');
     const enlist_button = cleverfiller_container.querySelector('#cf-enlist-button');
-    const submit_button = cleverfiller_container.querySelector('#cf-submit-button');
     const run_button = cleverfiller_container.querySelector('#cf-run-button');
     const reset_button = cleverfiller_container.querySelector('#cf-reset-button');
+    setTimeout(() => {
+        // Set up auto-save functionality
+        setup_auto_save(cleverfiller_container);
+        update_enlist_count();
+    }, 500);
     setTimeout(() => {
         // Hide button: header button to hide the panel
         hide_button.addEventListener('click', () => {
@@ -431,30 +508,8 @@ function createUI() {
             highlight_form_elements(inputtable_elements);
             // Finally: Create hover overlay for each element
             hover_overlay_handler(inputtable_elements);
+            update_enlist_count(); // Update the enlist count badge
         });
-        // Save button: save the settings to GM_value
-        submit_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
-            // Initialize loading state
-            const loadingText = cleverfiller_container.querySelector('#cf-console-log');
-            loadingText.textContent = 'Saving...';
-            loadingText.style.color = '#4a90e2'; // Blue color for loading
-            submit_button.disabled = true;
-            // Save the settings with a delay to show the loading state
-            setTimeout(() => {
-                // Save the settings
-                GM_setValue('api', api_input.value);
-                GM_setValue('model', model_option.value);
-                GM_setValue('context', context_input.value);
-                // Show success state
-                loadingText.style.color = '#4CAF50'; // Green color for success
-                loadingText.textContent = 'Saved';
-                // Clear the message after 1 seconds
-                setTimeout(() => {
-                    loadingText.textContent = ''; // Clear text
-                    submit_button.disabled = false;
-                }, 1000);
-            }, 1000); // Short delay to make the animation visible
-        }));
         reset_button.addEventListener('click', () => {
             const loadingText = cleverfiller_container.querySelector('#cf-console-log');
             loadingText.textContent = 'Reset the elements...';
@@ -492,6 +547,8 @@ function createUI() {
                 }, 2000);
                 return;
             }
+            ElementCache.length = 0; // Clear the ElementCache before processing
+            hover_overlay_handler(scan_form_elements()); // Re-scan the form elements
             // Check if elements are available in the ElementCache
             if (ElementCache.length === 0) {
                 loadingText.textContent = 'No form elements selected.';
@@ -558,5 +615,8 @@ function createUI() {
             }
         }));
     }, 500);
+    setupTabNavigation(cleverfiller_container);
+}
+function workflow_mode_enable() {
 }
 createUI();
