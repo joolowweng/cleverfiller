@@ -1,5 +1,3 @@
-# CleverFiller
-
 ![Example](assets/example.png)
 
 ## Overview

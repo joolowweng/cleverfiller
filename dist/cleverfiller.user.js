@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.3.2
+// @version      1.3.3
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -15,7 +15,7 @@
 // @grant        GM_getResourceText
 // @grant        GM_getResourceURL
 // @grant        GM_info
-// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html?ts=1.3.2
+// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html?ts=2025-04-11T10%3A02%3A49.000Z
 // @run-at       document-start
 // ==/UserScript==
 'use strict';
