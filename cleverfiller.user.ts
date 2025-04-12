@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.3.3
+// @version      1.3.4
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -15,16 +15,19 @@
 // @grant        GM_getResourceText
 // @grant        GM_getResourceURL
 // @grant        GM_info
-// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html?ts=2025-04-11T10%3A02%3A49.000Z
+// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/dev/html/index.html
 // @run-at       document-start
 // ==/UserScript==
 
 'use strict';
 
-// 2025-04-11 @ 10:02:49: Modify the logic that includes elements in the list rather than excluding them.
+// EnlistArray: Array to store enlisted elements
 const EnlistArray: Array<Record<string, any>> = GM_getValue('enlist', []);
+// ElementCache: Array to store the fillable elements that are currently in the DOM
 const ElementCache: HTMLElement[] = [];
 
+// General Utility Functions
+// --------------------------------------------------------
 function get_app_info(): { name: string; version: string } {
 
     const script = GM_info.script;
@@ -33,6 +36,14 @@ function get_app_info(): { name: string; version: string } {
     return { name, version };
 }
 
+function get_window_url(): string {
+    const url = window.location.href; // Get the current URL of the window
+    return url; // Return the URL
+}
+// -----------------------------------------------------------
+
+// AI Part
+// -------------------------------------------------------
 async function get_response<T>(options: Tampermonkey.Request<any>, on_start?: () => void): Promise<T | string> {
     // April 9 2025 - Added a callback function to be executed when the request starts.
     return new Promise((resolve, reject) => {
@@ -129,33 +140,10 @@ function parse_ai_response(response: any): string {
         return '';
     }
 }
+// -------------------------------------------------------
 
-// 2025.04.11: Fixed the issue where the script was not able to find the form elements correctly.
-function scan_form_elements(): NodeListOf<HTMLInputElement> {
-
-    const allInputs = document.querySelectorAll<HTMLInputElement>('input, textarea, select');
-    // Exclude elements within div[id="cleverfiller-container"]
-    const filteredInputs = Array.from(allInputs).filter(input => {
-        const parentDiv = input.closest('div#cleverfiller-container');
-        return !parentDiv;
-    });
-
-    return filteredInputs as unknown as NodeListOf<HTMLInputElement>;
-}
-// TODO: Improve the logic to find the label text of the element.
-function get_label_text(element: HTMLInputElement): string {
-    // Get the label text of the element
-    const parentDiv = element.closest('div');
-    let labelText = parentDiv ? parentDiv.querySelector('label')?.textContent || '' : ''; // Get the label text
-    if (labelText === '') {
-        // Look for the parent <tr> element to find the sibling <td> element
-        const parentTr = element.closest('tr');
-        const siblingTd = parentTr ? parentTr.querySelector('td') : null;
-        labelText = siblingTd ? siblingTd.textContent || '' : '';
-    }
-    return labelText; // Return the label text
-}
-
+// UI Part
+// -------------------------------------------------------
 // 2025.04.11: Tweaked style of highlighted elements.
 function highlight_form_elements(elements: NodeListOf<HTMLInputElement>): void {
 
@@ -166,7 +154,6 @@ function highlight_form_elements(elements: NodeListOf<HTMLInputElement>): void {
         border-radius: 4px;
         transition: all 0.3s ease;
         `;
-        element.placeholder = 'CleverFiller takes over';
     }
 }
 
@@ -177,7 +164,7 @@ function hover_overlay_handler(elements: NodeListOf<HTMLInputElement>): void {
 
     for (const element of Array.from(elements)) {
         // 生成当前元素的属性（已过滤掉不需要的属性）
-        const attributes = exemplify_attribute_values(element as HTMLElement);
+        const attributes = filter_redundant_attributes(element as HTMLElement);
 
         // 检查元素是否已在 EnlistArray 中存在
         let isAlreadyEnlisted = false;
@@ -242,7 +229,57 @@ function hover_overlay_handler(elements: NodeListOf<HTMLInputElement>): void {
     }
 }
 
-function exemplify_attribute_values(element: HTMLElement): Record<string, string> {
+function fill_form(element: HTMLElement, value: string): void {
+    // Fill the form element with the value
+    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+        (element as HTMLInputElement).value = value;
+    } else if (element.tagName === 'SELECT') {
+        const selectElement = element as HTMLSelectElement;
+        const optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
+        if (optionToSelect) {
+            selectElement.value = optionToSelect.value;
+        }
+    }
+}
+// ----------------------------------------------------------
+
+// Core Functionality
+// ----------------------------------------------------------
+
+// 2025.04.11: Fixed the issue where the script was not able to find the form elements correctly.
+function scan_form_elements(): NodeListOf<HTMLInputElement> {
+
+    const allInputs = document.querySelectorAll<HTMLInputElement>('input, textarea, select');
+    // Exclude elements within div[id="cleverfiller-container"]
+    const filteredInputs = Array.from(allInputs).filter(input => {
+        const parentDiv = input.closest('div#cleverfiller-container');
+        return !parentDiv;
+    });
+
+    return filteredInputs as unknown as NodeListOf<HTMLInputElement>;
+}
+// TODO: Improve the logic to find the label text of the element.
+function get_label_text(element: HTMLInputElement): string {
+    // Get the label text of the element
+    const label_text = element.closest('div') ? element.closest('div')?.querySelector('label')?.textContent || '' : '';// Get the parent <div> element
+    const placeholder_text = element.placeholder || ''; // Get the placeholder text
+    const table_label = element.closest('tr') ? element.closest('tr')?.querySelector('tr')?.textContent || '' : ''; // Get the parent <tr> element
+    const label = label_text || placeholder_text || table_label; // Use the label text or placeholder text if available
+    return label; // Return the label text
+}
+
+// Get all attributes from HTML element and return them as an object
+function get_element_attributes(element: HTMLElement): { [key: string]: string } {
+    const attributes: NamedNodeMap = element.attributes;
+    const attributeValues: { [key: string]: string } = {};
+    for (let i = 0; i < attributes.length; i++) {
+        const attr = attributes[i];
+        attributeValues[attr.name] = attr.value;
+    }
+    return attributeValues; // Return the attribute values as an object
+}
+
+function filter_redundant_attributes(element: HTMLElement): Record<string, string> {
     let attributeValues = get_element_attributes(element as HTMLElement);
     // Define the attributes to be excluded
     const excludeAttributes = [
@@ -253,7 +290,6 @@ function exemplify_attribute_values(element: HTMLElement): Record<string, string
         'disabled',
         'readonly',
         'autocomplete',
-        'placeholder',
         'aria-checked',
         'aria-selected',
         'aria-expanded',
@@ -272,36 +308,48 @@ function exemplify_attribute_values(element: HTMLElement): Record<string, string
         }
     });
     return attributeValues; // Return the attribute values as an object
-
 }
-
+// Store the element to the EnlistArray(disk-cache) and ElementCache(runtime-cache)
 function enlist_element(element: HTMLElement): void {
-    // 直接使用 generate_enlist_data 获取已过滤的数据
-    const enlist_data = generate_enlist_data(element);
 
-    // 创建元素签名用于比较
-    const elementSignature = `${enlist_data.url}|${enlist_data.labelText}|${JSON.stringify(enlist_data.attributeValues)}`;
+    const extracted_enlist_data = extract_data_for_enlist_storage(element);
 
-    // 检查元素是否已经存在，防止重复
+    // Create a unique signature for the element to prevent duplicates
+    const elementSignature = `${extracted_enlist_data.url}|${extracted_enlist_data.labelText}|${JSON.stringify(extracted_enlist_data.attributeValues)}`;
+
+    // Check if the element already exists in the EnlistArray
     const alreadyExists = EnlistArray.some(item => {
         const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
         return itemSignature === elementSignature;
     });
 
     if (!alreadyExists) {
-        EnlistArray.push(enlist_data);
+        EnlistArray.push(extracted_enlist_data);
         ElementCache.push(element);
         GM_setValue('enlist', EnlistArray);
-        console.log('Enlisted element:', enlist_data);
     }
 }
 
+function remove_enlist_element(element: HTMLElement): void {
+    // Remove the element from the EnlistArray and ElementCache
+    const extracted_enlist_data = extract_data_for_enlist_storage(element);
+    const elementSignature = `${extracted_enlist_data.url}|${extracted_enlist_data.labelText}|${JSON.stringify(extracted_enlist_data.attributeValues)}`;
+    const index = EnlistArray.findIndex(item => {
+        const itemSignature = `${item.url}|${item.labelText}|${JSON.stringify(item.attributeValues)}`;
+        return itemSignature === elementSignature;
+    });
+    if (index !== -1) {
+        EnlistArray.splice(index, 1); // Remove from EnlistArray
+        ElementCache.splice(index, 1); // Remove from ElementCache
+        GM_setValue('enlist', EnlistArray); // Update the storage
+    }
+}
 // 2025-04-12 @ 01:34:38: Added a function to generate enlist data for the element.
-function generate_enlist_data(element: HTMLElement): Record<string, any> {
+function extract_data_for_enlist_storage(element: HTMLElement): Record<string, any> {
     const url = get_window_url();
     const labelText = get_label_text(element as HTMLInputElement);
     // 使用 exemplify_attribute_values 而不是 get_element_attributes
-    const attributeValues = exemplify_attribute_values(element);
+    const attributeValues = filter_redundant_attributes(element);
     const data = {
         url: url,
         labelText: labelText,
@@ -309,56 +357,40 @@ function generate_enlist_data(element: HTMLElement): Record<string, any> {
     };
     return data;
 }
-function get_window_url(): string {
-    const url = window.location.href; // Get the current URL of the window
-    return url; // Return the URL
-}
+// -----------------------------------------------------
 
-function get_element_attributes(element: HTMLElement): { [key: string]: string } {
-    const attributes: NamedNodeMap = element.attributes;
-    const attributeValues: { [key: string]: string } = {};
-    for (let i = 0; i < attributes.length; i++) {
-        const attr = attributes[i];
-        attributeValues[attr.name] = attr.value;
-    }
-    return attributeValues; // Return the attribute values as an object
-}
-
-function fill_form(element: HTMLElement, value: string): void {
-    // Fill the form element with the value
-    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
-        (element as HTMLInputElement).value = value;
-    } else if (element.tagName === 'SELECT') {
-        const selectElement = element as HTMLSelectElement;
-        const optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
-        if (optionToSelect) {
-            selectElement.value = optionToSelect.value;
-        }
-    }
-}
-
+// Main function to create the UI
 // 2025-04-11 @ 11:28:50: Extracted the HTML to a separate file for better maintainability.
 function createUI(): void {
+    // Create the container div and set its properties
     const container = document.createElement('div');
     const container_html = GM_getResourceText('index');
     container.innerHTML = container_html;
     document.body.appendChild(container);
     const cleverfiller_container = container.querySelector('#cleverfiller-container') as HTMLDivElement;
+
+    // Initially show or hide the container
     cleverfiller_container.style.display = 'block';
+
+    // Get the app name and version from the script metadata
     const heading = container.querySelector('#cf-app-name') as HTMLHeadingElement;
     heading.textContent = `${get_app_info().name}`;
-    const api_input = container.querySelector('#cf-api-input') as HTMLInputElement;
-    api_input.value = GM_getValue('api', '');
-    // don't show the complete api key in the input field
-    const model_option = container.querySelector('#cf-model-select') as HTMLSelectElement;
-    model_option.value = GM_getValue('model', 'deepseek-chat');
     const version = container.querySelector('#cf-version-info') as HTMLSpanElement;
     version.textContent = `version: ${get_app_info().version}`;
+
+    // Get the settings from GM_value and set them in the input fields
+    const api_input = container.querySelector('#cf-api-input') as HTMLInputElement;
+    api_input.value = GM_getValue('api', '');
+    const model_option = container.querySelector('#cf-model-select') as HTMLSelectElement;
+    model_option.value = GM_getValue('model', 'deepseek-chat');
     const context_input = container.querySelector('#cf-context-textarea') as HTMLTextAreaElement;
     context_input.value = GM_getValue('context', '');
+
+    // Set the default loading text
     const loadingText = cleverfiller_container.querySelector('#cf-console-log') as HTMLElement;
     loadingText.textContent = 'Press Alt + S to show panel';
 
+    // Short-cut key to show the panel
     function activate_clever_filler_display(event: KeyboardEvent): void {
         if (event.altKey && (event.key.toLowerCase() === 's')) {
             event.preventDefault();
@@ -367,34 +399,39 @@ function createUI(): void {
     }
     document.addEventListener('keydown', activate_clever_filler_display);
 
-    // 2025.04.10: Fully redesigned the header to improve aesthetics and usability.
+    // Add event listeners to the buttons
     const hide_button = cleverfiller_container.querySelector('#cf-hide-button') as HTMLButtonElement;
-    const hightlight_button = cleverfiller_container.querySelector('#cf-enlist-button') as HTMLButtonElement;
+    const enlist_button = cleverfiller_container.querySelector('#cf-enlist-button') as HTMLButtonElement;
     const submit_button = cleverfiller_container.querySelector('#cf-submit-button') as HTMLButtonElement;
     const run_button = cleverfiller_container.querySelector('#cf-run-button') as HTMLButtonElement;
 
     setTimeout(() => {
 
+        // Hide button: header button to hide the panel
         hide_button.addEventListener('click', () => {
             cleverfiller_container.style.display = 'none';
         });
 
-        hightlight_button.addEventListener('click', () => {
+        // Enlist button: Main logic to enlist elements
+        enlist_button.addEventListener('click', () => {
+            // First: get all fillable elements
             const inputtable_elements = scan_form_elements();
+            // Then: highlight them
             highlight_form_elements(inputtable_elements);
+            // Finally: Create hover overlay for each element
             hover_overlay_handler(inputtable_elements);
         });
 
+        // Save button: save the settings to GM_value
         submit_button.addEventListener('click', async () => {
-            // Get elements for animation
-            const loadingText = cleverfiller_container.querySelector('#cf-console-log') as HTMLElement;
 
-            // First show saving state
+            // Initialize loading state
+            const loadingText = cleverfiller_container.querySelector('#cf-console-log') as HTMLElement;
             loadingText.textContent = 'Saving...';
             loadingText.style.color = '#4a90e2'; // Blue color for loading
             submit_button.disabled = true;
 
-            // Small delay to show the saving state
+            // Save the settings with a delay to show the loading state
             setTimeout(() => {
                 // Save the settings
                 GM_setValue('api', api_input.value);
@@ -405,7 +442,7 @@ function createUI(): void {
                 loadingText.style.color = '#4CAF50'; // Green color for success
                 loadingText.textContent = 'Saved';
 
-                // Clear the message after .5 seconds
+                // Clear the message after 1 seconds
                 setTimeout(() => {
                     loadingText.textContent = ''; // Clear text
                     submit_button.disabled = false;
@@ -413,18 +450,24 @@ function createUI(): void {
             }, 1000);  // Short delay to make the animation visible
         });
 
+        // Run button: AI logic to fill the form fields
         run_button.addEventListener('click', async () => {
-            // Get elements for animation
+
             const loadingText = cleverfiller_container.querySelector('#cf-console-log') as HTMLElement;
+            loadingText.textContent = 'Loading...';
+            loadingText.style.color = '#4a90e2'; // Blue color for loading
 
             // Disable the button while processing
             run_button.disabled = true;
 
             // Validate settings
             if (api_input.value === '' || context_input.value === '') {
+
+                // Show error message if API or context is empty
                 loadingText.textContent = 'Incorrect API or empty context';
                 loadingText.style.color = '#f44336'; // Red color for error
 
+                // Clear the message after 2 seconds
                 setTimeout(() => {
                     loadingText.textContent = '';
                     run_button.disabled = false;
@@ -432,9 +475,9 @@ function createUI(): void {
                 return;
             }
 
-            // Check if elements are available
+            // Check if elements are available in the ElementCache
             if (ElementCache.length === 0) {
-                loadingText.textContent = 'No form elements selected. Click Enlist first.';
+                loadingText.textContent = 'No form elements selected.';
                 loadingText.style.color = '#ff9800'; // Warning color
 
                 setTimeout(() => {
@@ -444,7 +487,7 @@ function createUI(): void {
                 return;
             }
 
-            // Show initial count
+            // Show loading message with the number of fields to be filled
             loadingText.textContent = `Preparing to fill ${ElementCache.length} form fields...`;
             loadingText.style.color = '#4a90e2'; // Blue color for loading
 
@@ -452,37 +495,44 @@ function createUI(): void {
             await new Promise(resolve => setTimeout(resolve, 800));
 
             try {
-                // Show loading indicators for all fields
-                for (let i = 0; i < ElementCache.length; i++) {
-                    const element = ElementCache[i] as HTMLInputElement;
-                    element.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-                    element.style.border = '2px solid #4a90e2';
-                }
 
                 // Process each field with AI
                 for (let i = 0; i < ElementCache.length; i++) {
-                    const element = ElementCache[i] as HTMLInputElement;
-                    const enlisted_element = EnlistArray[i].attributeValues;
+                    // Use ElementCache to process DOM
+                    // Use EnlistArray to get element attributes that are better for AI model to process.
+                    // The fillable elements should be consistent with both arrays.
+                    const cached_element = ElementCache[i] as HTMLInputElement;
+                    const enlisted_element_attr = EnlistArray[i].attributeValues;
 
-                    // Update console with current field
+                    // Change the style of the element to indicate processing
+                    cached_element.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                    cached_element.style.border = '2px solid #4a90e2';
+
+                    // Update loading text with current status
                     loadingText.textContent = `Processing field ${i + 1}/${ElementCache.length}...`;
 
                     try {
-                        const prompt = create_prompt(context_input.value, enlisted_element);
+                        // Create a prompt: context_input contains the context information, and enlisted_element contains the field information.
+                        const prompt = create_prompt(context_input.value, enlisted_element_attr);
 
                         // Show specific field information
-                        if (element.id || element.name) {
-                            loadingText.textContent = `Processing ${element.id || element.name} (${i + 1}/${ElementCache.length})...`;
+                        if (enlisted_element_attr.labelText) {
+                            loadingText.textContent = `Processing ${enlisted_element_attr.labelText} (${i + 1}/${ElementCache.length})...`;
                         }
-                        console.log('[CleverFiller] Prompt:', prompt);
 
+                        // Call the DeepSeek API with the prompt
                         const response = await call_deepseek_api(prompt);
+                        // Get the string value from the response that contains only the value of the field.
                         const fieldValue = parse_ai_response(response);
                         console.log('[CleverFiller] Field Value:', fieldValue);
-                        fill_form(element, fieldValue); // Fill the form element with the value
 
-                    } catch (fieldError) {
-                        // Error handling remains the same...
+                        // TODO: Support more types of elements and stream the response to the element.
+                        fill_form(cached_element, fieldValue);
+
+                    } catch (error) {
+                        console.error('Error processing field:', error);
+                        loadingText.textContent = `Error processing field ${i + 1}/${ElementCache.length}`;
+                        loadingText.style.color = '#f44336'; // Red color for error
                     }
                 }
 
