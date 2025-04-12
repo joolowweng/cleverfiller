@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      1.4.3
+// @version      1.4.4
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -171,6 +171,7 @@ function hover_overlay_handler(elements) {
             const enlistedSignature = create_element_signature(enlistedElement);
             if (elementSignature === enlistedSignature) {
                 isAlreadyEnlisted = true;
+                ElementCache.push(element); // Add the element to the ElementCache
                 break;
             }
         }
@@ -206,6 +207,8 @@ function hover_overlay_handler(elements) {
                 e.stopPropagation();
                 overlay.remove();
                 remove_enlist_element(element);
+                // reload this function to load again
+                hover_overlay_handler(elements);
             });
             document.body.appendChild(overlay);
             continue;
@@ -240,6 +243,8 @@ function hover_overlay_handler(elements) {
             e.stopPropagation();
             overlay.remove();
             enlist_element(element);
+            // reload this function to load again
+            hover_overlay_handler(elements);
         });
         document.body.appendChild(overlay);
     }
@@ -451,13 +456,22 @@ function createUI() {
             }, 1000); // Short delay to make the animation visible
         }));
         reset_button.addEventListener('click', () => {
+            const loadingText = cleverfiller_container.querySelector('#cf-console-log');
+            loadingText.textContent = 'Reset the elements...';
             //reset EnlistArray for current window url and ElementCache
-            EnlistArray.length = 0;
-            ElementCache.length = 0;
-            GM_setValue(get_window_url(), EnlistArray);
-            // Clear the enlist elements in the UI
-            const enlistElements = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove');
-            enlistElements.forEach(element => element.remove());
+            setTimeout(() => {
+                EnlistArray.length = 0;
+                ElementCache.length = 0;
+                GM_setValue(get_window_url(), EnlistArray);
+                window.location.reload();
+                // Show success message
+                loadingText.textContent = 'Reset successfully!';
+                loadingText.style.color = '#4CAF50'; // Green color for success
+                // reload the page to reset the form elements
+                setTimeout(() => {
+                    loadingText.textContent = ''; // Clear text
+                }, 1000); // Clear the message after 1 seconds
+            }, 1000); // Short delay to make the animation visible
         });
         // Run button: AI logic to fill the form fields
         run_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
