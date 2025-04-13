@@ -47,8 +47,13 @@
                         </label>
                     </div>
 
-                </div>
+                    <div id="cleverfiller-controls">
+                        <div class="cf-version">
+                            <span id="cf-version-info"></span>
+                        </div>
+                    </div>
 
+                </div>
             </div>
 
             <!-- Workflow Mode -->
@@ -75,23 +80,21 @@
                         <button type="button" id="cf-reset-button">Reset</button>
                         <button type="button" id="cf-run-button">Run</button>
                     </div>
+                    <div id="cleverfiller-controls">
+
+                        <div class="cf-loading">
+                            <svg id="cf-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none"
+                                    stroke-dasharray="60 30" />
+                            </svg>
+                            <span id="cf-console-log"></span>
+                        </div>
+
+                    </div>
                 </div>
+
             </div>
 
-            <div id="cleverfiller-controls">
-
-                <div class="cf-loading">
-                    <svg id="cf-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="10" stroke="#4a90e2" stroke-width="4" fill="none"
-                            stroke-dasharray="60 30" />
-                    </svg>
-                    <span id="cf-console-log"></span>
-                </div>
-
-                <div class="cf-version">
-                    <span id="cf-version-info"></span>
-                </div>
-            </div>
         </div>
     </div>
 </div>

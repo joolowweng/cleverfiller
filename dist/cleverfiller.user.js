@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      2.1.0
+// @version      2.2.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -36,9 +36,11 @@ const default_cache = {
 // EnlistArray: Array to store enlisted elements
 const EnlistArray = GM_getValue(get_window_url(), default_cache).enlist || [];
 // ElementCache: Array to store the fillable elements that are currently in the DOM
-const ElementCache = [];
 const PreloadArray = GM_getValue(get_window_url(), default_cache).preload || [];
 const AfterloadArray = GM_getValue(get_window_url(), default_cache).afterload || [];
+const ElementCache = [];
+const PreloadCache = [];
+const AfterloadCache = [];
 // General Utility Functions
 // -----------------------------------------------------------
 function get_app_info() {
@@ -165,7 +167,7 @@ function highlight_form_elements(elements) {
         `;
     }
 }
-function hover_overlay_handler(elements, workflow_mode) {
+function hover_overlay_handler(elements) {
     // Clear existing overlays if any
     const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove');
     existingOverlays.forEach(overlay => overlay.remove());
@@ -358,8 +360,11 @@ function enlist_element(element) {
     if (!alreadyExists) {
         EnlistArray.push(extracted_enlist_data);
         ElementCache.push(element);
+        const currentData = GM_getValue(get_window_url(), default_cache);
         GM_setValue(get_window_url(), {
             enlist: EnlistArray,
+            preload: currentData.preload || [],
+            afterload: currentData.afterload || []
         });
         update_enlist_count();
     }
@@ -374,10 +379,47 @@ function remove_enlist_element(element) {
     if (index !== -1) {
         EnlistArray.splice(index, 1); // Remove from EnlistArray
         ElementCache.splice(index, 1); // Remove from ElementCache
+        const currentData = GM_getValue(get_window_url(), default_cache);
         GM_setValue(get_window_url(), {
-            enlist: EnlistArray
-        }); // Update the storage
+            enlist: EnlistArray,
+            preload: currentData.preload || [],
+            afterload: currentData.afterload || []
+        });
         update_enlist_count(); // Update the enlist count badge
+    }
+}
+function remove_preload_element(element) {
+    const elementSignature = create_element_signature(element);
+    const index = PreloadArray.findIndex(item => {
+        const itemSignature = create_element_signature(item);
+        return itemSignature === elementSignature;
+    });
+    if (index !== -1) {
+        PreloadArray.splice(index, 1); // Remove from PreloadArray
+        PreloadCache.splice(index, 1); // Remove from PreloadCache
+        const currentData = GM_getValue(get_window_url(), default_cache);
+        GM_setValue(get_window_url(), {
+            enlist: currentData.enlist || [],
+            preload: PreloadArray,
+            afterload: currentData.afterload || []
+        });
+    }
+}
+function remove_afterload_element(element) {
+    const elementSignature = create_element_signature(element);
+    const index = AfterloadArray.findIndex(item => {
+        const itemSignature = create_element_signature(item);
+        return itemSignature === elementSignature;
+    });
+    if (index !== -1) {
+        AfterloadArray.splice(index, 1); // Remove from AfterloadArray
+        AfterloadCache.splice(index, 1); // Remove from AfterloadCache
+        const currentData = GM_getValue(get_window_url(), default_cache);
+        GM_setValue(get_window_url(), {
+            enlist: currentData.enlist || [],
+            preload: currentData.preload || [],
+            afterload: AfterloadArray
+        });
     }
 }
 // Extract data to create the enlist object
@@ -648,6 +690,171 @@ function add_dropdown_button_listener(cleverfiller_container) {
         }
     });
     preload_button === null || preload_button === void 0 ? void 0 : preload_button.addEventListener('click', () => {
+        hover_overlay_handler_for_loader_button(scan_form_elements(), 'preload');
     });
+    afterload_button === null || afterload_button === void 0 ? void 0 : afterload_button.addEventListener('click', () => {
+        hover_overlay_handler_for_loader_button(scan_form_elements(), 'afterload');
+    });
+}
+function hover_overlay_handler_for_loader_button(elements, loader_method) {
+    // Clear existing overlays if any
+    const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove, .cleverfiller-hover-overlay-preload');
+    existingOverlays.forEach(overlay => overlay.remove());
+    if (loader_method === 'preload') {
+        for (const element of Array.from(elements)) {
+            const elementSignature = create_element_signature(element);
+            // Check if element is already in PreloadArray
+            let isAlreadyEnlisted = false;
+            for (const enlistedElement of PreloadArray) {
+                const enlistedSignature = create_element_signature(enlistedElement);
+                if (elementSignature === enlistedSignature) {
+                    isAlreadyEnlisted = true;
+                    PreloadCache.push(element); // Add to cache
+                    break;
+                }
+            }
+            // Create a hover overlay for the element
+            const rect = element.getBoundingClientRect();
+            const overlay = document.createElement('div');
+            overlay.className = isAlreadyEnlisted ? 'cleverfiller-hover-overlay-remove' : 'cleverfiller-hover-overlay-add';
+            // Common styles for both overlays
+            overlay.style.position = 'absolute';
+            overlay.style.top = `${rect.top + window.scrollY - 5}px`;
+            overlay.style.left = `${rect.left - 5}px`;
+            overlay.style.width = `${rect.width + 10}px`;
+            overlay.style.height = `${rect.height + 10}px`;
+            overlay.style.zIndex = '999';
+            overlay.style.cursor = 'pointer';
+            overlay.style.border = '2px dashed transparent';
+            overlay.style.boxSizing = 'border-box';
+            if (isAlreadyEnlisted) {
+                // Styles for removing elements
+                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+                // Hover overlay event listeners for removing elements
+                overlay.addEventListener('mouseover', () => {
+                    overlay.style.border = '2px dashed #f44336';
+                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
+                    overlay.innerHTML = '<div style="background: rgba(244, 67, 54, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Remove</div>';
+                });
+                overlay.addEventListener('mouseout', () => {
+                    overlay.style.border = '2px dashed transparent';
+                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+                    overlay.innerHTML = '';
+                });
+                overlay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    overlay.remove();
+                    remove_preload_element(element);
+                    // reload this function to load again
+                    hover_overlay_handler_for_loader_button(elements, 'preload');
+                });
+            }
+            else {
+                // Styles for adding elements
+                overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                // Hover overlay event listeners for adding elements
+                overlay.addEventListener('mouseover', () => {
+                    overlay.style.border = '2px dashed #4a90e2';
+                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.2)';
+                    overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Add to Preload</div>';
+                });
+                overlay.addEventListener('mouseout', () => {
+                    overlay.style.border = '2px dashed transparent';
+                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                    overlay.innerHTML = '';
+                });
+                overlay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    overlay.remove();
+                    // Add to preload
+                    const extracted_data = extract_data_for_enlist_storage(element);
+                    PreloadArray.push(extracted_data);
+                    PreloadCache.push(element);
+                    GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { preload: PreloadArray }));
+                    // reload this function to update UI
+                    hover_overlay_handler_for_loader_button(elements, 'preload');
+                });
+            }
+            document.body.appendChild(overlay);
+        }
+    }
+    else if (loader_method === 'afterload') {
+        for (const element of Array.from(elements)) {
+            const elementSignature = create_element_signature(element);
+            // Check if element is already in AfterloadArray
+            let isAlreadyEnlisted = false;
+            for (const enlistedElement of AfterloadArray) {
+                const enlistedSignature = create_element_signature(enlistedElement);
+                if (elementSignature === enlistedSignature) {
+                    isAlreadyEnlisted = true;
+                    AfterloadCache.push(element); // Add to cache
+                    break;
+                }
+            }
+            // Create hover overlay with similar logic as preload
+            const rect = element.getBoundingClientRect();
+            const overlay = document.createElement('div');
+            overlay.className = isAlreadyEnlisted ? 'cleverfiller-hover-overlay-remove' : 'cleverfiller-hover-overlay-add';
+            // Common styles for both overlays
+            overlay.style.position = 'absolute';
+            overlay.style.top = `${rect.top + window.scrollY - 5}px`;
+            overlay.style.left = `${rect.left - 5}px`;
+            overlay.style.width = `${rect.width + 10}px`;
+            overlay.style.height = `${rect.height + 10}px`;
+            overlay.style.zIndex = '999';
+            overlay.style.cursor = 'pointer';
+            overlay.style.border = '2px dashed transparent';
+            overlay.style.boxSizing = 'border-box';
+            if (isAlreadyEnlisted) {
+                // Styles for removing elements
+                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+                // Hover overlay event listeners for removing elements
+                overlay.addEventListener('mouseover', () => {
+                    overlay.style.border = '2px dashed #f44336';
+                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
+                    overlay.innerHTML = '<div style="background: rgba(244, 67, 54, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Remove</div>';
+                });
+                overlay.addEventListener('mouseout', () => {
+                    overlay.style.border = '2px dashed transparent';
+                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+                    overlay.innerHTML = '';
+                });
+                overlay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    overlay.remove();
+                    remove_afterload_element(element); // 修正：使用 afterload 的移除函数
+                    // reload this function to load again
+                    hover_overlay_handler_for_loader_button(elements, 'afterload');
+                });
+            }
+            else {
+                // Styles for adding elements
+                overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                // Hover overlay event listeners for adding elements
+                overlay.addEventListener('mouseover', () => {
+                    overlay.style.border = '2px dashed #4a90e2';
+                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.2)';
+                    overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Add to Afterload</div>';
+                });
+                overlay.addEventListener('mouseout', () => {
+                    overlay.style.border = '2px dashed transparent';
+                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                    overlay.innerHTML = '';
+                });
+                overlay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    overlay.remove();
+                    // Add to afterload
+                    const extracted_data = extract_data_for_enlist_storage(element);
+                    AfterloadArray.push(extracted_data);
+                    AfterloadCache.push(element);
+                    GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { afterload: AfterloadArray }));
+                    // reload this function to update UI
+                    hover_overlay_handler_for_loader_button(elements, 'afterload');
+                });
+            }
+            document.body.appendChild(overlay);
+        }
+    }
 }
 createUI();
