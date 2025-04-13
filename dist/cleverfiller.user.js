@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      2.2.0
+// @version      2.3.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -38,7 +38,7 @@ const EnlistArray = GM_getValue(get_window_url(), default_cache).enlist || [];
 // ElementCache: Array to store the fillable elements that are currently in the DOM
 const PreloadArray = GM_getValue(get_window_url(), default_cache).preload || [];
 const AfterloadArray = GM_getValue(get_window_url(), default_cache).afterload || [];
-const ElementCache = [];
+const EnlistCache = [];
 const PreloadCache = [];
 const AfterloadCache = [];
 // General Utility Functions
@@ -154,7 +154,7 @@ function parse_ai_response(response) {
     }
 }
 // -----------------------------------------------------------
-// UI Part
+// DOM Manipulation Functions
 // -----------------------------------------------------------
 // 2025.04.11: Tweaked style of highlighted elements.
 function highlight_form_elements(elements) {
@@ -167,109 +167,141 @@ function highlight_form_elements(elements) {
         `;
     }
 }
-function hover_overlay_handler(elements) {
+function create_hover_overlays(elements, cacheArray, dataArray, addCallback, removeCallback, addColor, removeColor, addLabel, removeLabel) {
     // Clear existing overlays if any
     const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove');
     existingOverlays.forEach(overlay => overlay.remove());
+    // Create a Map for quick lookup
+    const dataMap = new Map();
+    dataArray.forEach(data => {
+        const signature = create_element_signature(data);
+        dataMap.set(signature, data);
+    });
     for (const element of Array.from(elements)) {
-        // See if the element is already enlisted
         const elementSignature = create_element_signature(element);
-        let isAlreadyEnlisted = false;
-        for (const enlistedElement of EnlistArray) {
-            // Compare the signatures of the enlisted elements with the current element
-            const enlistedSignature = create_element_signature(enlistedElement);
-            if (elementSignature === enlistedSignature) {
-                isAlreadyEnlisted = true;
-                ElementCache.push(element); // Add the element to the ElementCache
-                break;
-            }
-        }
-        // If the element is already enlisted, create a remove hover overlay
+        const isAlreadyEnlisted = dataMap.has(elementSignature);
         if (isAlreadyEnlisted) {
-            // Create a hover overlay for the element
-            const rect = element.getBoundingClientRect();
-            const overlay = document.createElement('div');
-            overlay.className = 'cleverfiller-hover-overlay-remove';
-            // Hover overlay styles for removing elements
-            overlay.style.position = 'absolute';
-            overlay.style.top = `${rect.top + window.scrollY - 5}px`;
-            overlay.style.left = `${rect.left - 5}px`;
-            overlay.style.width = `${rect.width + 10}px`;
-            overlay.style.height = `${rect.height + 10}px`;
-            overlay.style.zIndex = '999';
-            overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
-            overlay.style.cursor = 'pointer';
-            overlay.style.border = '2px dashed transparent';
-            overlay.style.boxSizing = 'border-box';
-            // Hover overlay event listeners for removing elements
-            overlay.addEventListener('mouseover', () => {
-                overlay.style.border = '2px dashed #f44336';
-                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
-                overlay.innerHTML = '<div style="background: rgba(244, 67, 54, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Remove</div>';
-            });
-            overlay.addEventListener('mouseout', () => {
-                overlay.style.border = '2px dashed transparent';
-                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
-                overlay.innerHTML = '';
-            });
-            overlay.addEventListener('click', (e) => {
-                e.stopPropagation();
-                overlay.remove();
-                remove_enlist_element(element);
-                // reload this function to load again
-                hover_overlay_handler(elements);
-            });
-            document.body.appendChild(overlay);
-            continue;
+            cacheArray.push(element); // Add to cache
         }
-        // Create a hover overlay for the element
+        // Create hover overlay
         const rect = element.getBoundingClientRect();
         const overlay = document.createElement('div');
-        overlay.className = 'cleverfiller-hover-overlay-add';
-        // Hover overlay styles for selecting elements
+        overlay.className = isAlreadyEnlisted ? 'cleverfiller-hover-overlay-remove' : 'cleverfiller-hover-overlay-add';
+        // Common styles
         overlay.style.position = 'absolute';
         overlay.style.top = `${rect.top + window.scrollY - 5}px`;
         overlay.style.left = `${rect.left - 5}px`;
         overlay.style.width = `${rect.width + 10}px`;
         overlay.style.height = `${rect.height + 10}px`;
         overlay.style.zIndex = '999';
-        overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
         overlay.style.cursor = 'pointer';
         overlay.style.border = '2px dashed transparent';
         overlay.style.boxSizing = 'border-box';
-        // Hover overlay event listeners for selecting elements
-        overlay.addEventListener('mouseover', () => {
-            overlay.style.border = '2px dashed #4a90e2';
-            overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.2)';
-            overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Select</div>';
-        });
-        overlay.addEventListener('mouseout', () => {
-            overlay.style.border = '2px dashed transparent';
-            overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-            overlay.innerHTML = '';
-        });
-        overlay.addEventListener('click', (e) => {
-            e.stopPropagation();
-            overlay.remove();
-            enlist_element(element);
-            // reload this function to load again
-            hover_overlay_handler(elements);
-        });
+        if (isAlreadyEnlisted) {
+            // Styles for removing elements
+            overlay.style.backgroundColor = removeColor;
+            overlay.addEventListener('mouseover', () => {
+                overlay.style.border = `2px dashed ${removeColor}`;
+                overlay.style.backgroundColor = `${removeColor.replace('0.1', '0.2')}`;
+                overlay.innerHTML = `<div style="background: ${removeColor.replace('0.1', '0.8')}; color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">${removeLabel}</div>`;
+            });
+            overlay.addEventListener('mouseout', () => {
+                overlay.style.border = '2px dashed transparent';
+                overlay.style.backgroundColor = removeColor;
+                overlay.innerHTML = '';
+            });
+            overlay.addEventListener('click', (e) => {
+                e.stopPropagation();
+                overlay.remove();
+                removeCallback(element);
+                create_hover_overlays(elements, cacheArray, dataArray, addCallback, removeCallback, addColor, removeColor, addLabel, removeLabel);
+            });
+        }
+        else {
+            // Styles for adding elements
+            overlay.style.backgroundColor = addColor;
+            overlay.addEventListener('mouseover', () => {
+                overlay.style.border = `2px dashed ${addColor}`;
+                overlay.style.backgroundColor = `${addColor.replace('0.1', '0.2')}`;
+                overlay.innerHTML = `<div style="background: ${addColor.replace('0.1', '0.8')}; color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">${addLabel}</div>`;
+            });
+            overlay.addEventListener('mouseout', () => {
+                overlay.style.border = '2px dashed transparent';
+                overlay.style.backgroundColor = addColor;
+                overlay.innerHTML = '';
+            });
+            overlay.addEventListener('click', (e) => {
+                e.stopPropagation();
+                overlay.remove();
+                addCallback(element);
+                create_hover_overlays(elements, cacheArray, dataArray, addCallback, removeCallback, addColor, removeColor, addLabel, removeLabel);
+            });
+        }
         document.body.appendChild(overlay);
+    }
+}
+function hover_overlay_handler_for_enlist_button(elements) {
+    create_hover_overlays(elements, EnlistCache, EnlistArray, enlist_element, remove_enlist_element, 'rgba(74, 144, 226, 0.1)', // Add color
+    'rgba(244, 67, 54, 0.1)', // Remove color
+    'Select', // Add label
+    'Remove' // Remove label
+    );
+}
+function hover_overlay_handler_for_load_button(elements, loader_method) {
+    if (loader_method === 'preload') {
+        create_hover_overlays(elements, PreloadCache, PreloadArray, (element) => {
+            const data = extract_data_for_enlist_storage(element);
+            PreloadArray.push(data);
+            PreloadCache.push(element);
+            GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { preload: PreloadArray }));
+        }, remove_preload_element, 'rgba(74, 144, 226, 0.1)', // Add color
+        'rgba(244, 67, 54, 0.1)', // Remove color
+        'Add to Preload', // Add label
+        'Remove' // Remove label
+        );
+    }
+    else if (loader_method === 'afterload') {
+        create_hover_overlays(elements, AfterloadCache, AfterloadArray, (element) => {
+            const data = extract_data_for_enlist_storage(element);
+            AfterloadArray.push(data);
+            AfterloadCache.push(element);
+            GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { afterload: AfterloadArray }));
+        }, remove_afterload_element, 'rgba(74, 144, 226, 0.1)', // Add color
+        'rgba(244, 67, 54, 0.1)', // Remove color
+        'Add to Afterload', // Add label
+        'Remove' // Remove label
+        );
     }
 }
 function fill_form(element, value) {
     // Fill the form element with the value
     if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
         element.value = value;
+        // Trigger events to ensure the framework detects the change
+        setTimeout(() => {
+            // Create and dispatch events that most frameworks listen for
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            console.log(`[CleverFiller] Field filled with value: "${value}"`);
+        }, 100);
     }
     else if (element.tagName === 'SELECT') {
         const selectElement = element;
         const optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
         if (optionToSelect) {
             selectElement.value = optionToSelect.value;
+            // Trigger change event for select elements
+            setTimeout(() => {
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log(`[CleverFiller] Select option set to: "${optionToSelect.value}"`);
+            }, 100);
         }
     }
+    // Reset any special styling applied during processing
+    setTimeout(() => {
+        element.style.backgroundColor = '';
+        element.style.border = '';
+    }, 500);
 }
 // -----------------------------------------------------------
 // Core Functionality
@@ -359,7 +391,7 @@ function enlist_element(element) {
     const alreadyExists = check_if_element_exists_in_enlist_array(element);
     if (!alreadyExists) {
         EnlistArray.push(extracted_enlist_data);
-        ElementCache.push(element);
+        EnlistCache.push(element);
         const currentData = GM_getValue(get_window_url(), default_cache);
         GM_setValue(get_window_url(), {
             enlist: EnlistArray,
@@ -378,7 +410,7 @@ function remove_enlist_element(element) {
     });
     if (index !== -1) {
         EnlistArray.splice(index, 1); // Remove from EnlistArray
-        ElementCache.splice(index, 1); // Remove from ElementCache
+        EnlistCache.splice(index, 1); // Remove from ElementCache
         const currentData = GM_getValue(get_window_url(), default_cache);
         GM_setValue(get_window_url(), {
             enlist: EnlistArray,
@@ -544,132 +576,14 @@ function createUI() {
     const enlist_button = cleverfiller_container.querySelector('#cf-enlist-button');
     const run_button = cleverfiller_container.querySelector('#cf-run-button');
     const reset_button = cleverfiller_container.querySelector('#cf-reset-button');
+    add_hide_button_listener(hide_button, cleverfiller_container);
+    add_enlist_button_listener(enlist_button, cleverfiller_container);
+    add_reset_button_listener(reset_button, cleverfiller_container);
+    add_run_button_listener(run_button, cleverfiller_container);
     setTimeout(() => {
         // Set up auto-save functionality
         setup_auto_save(cleverfiller_container);
         update_enlist_count();
-    }, 500);
-    setTimeout(() => {
-        // Hide button: header button to hide the panel
-        hide_button.addEventListener('click', () => {
-            cleverfiller_container.style.display = 'none';
-        });
-        // Enlist button: Main logic to enlist elements
-        enlist_button.addEventListener('click', () => {
-            // First: get all fillable elements
-            const inputtable_elements = scan_form_elements();
-            // Then: highlight them
-            highlight_form_elements(inputtable_elements);
-            // Finally: Create hover overlay for each element
-            hover_overlay_handler(inputtable_elements);
-            update_enlist_count(); // Update the enlist count badge
-        });
-        reset_button.addEventListener('click', () => {
-            const loadingText = cleverfiller_container.querySelector('#cf-console-log');
-            loadingText.textContent = 'Reset the elements...';
-            //reset EnlistArray for current window url and ElementCache
-            setTimeout(() => {
-                EnlistArray.length = 0;
-                ElementCache.length = 0;
-                GM_setValue(get_window_url(), {
-                    enlist: EnlistArray
-                });
-                window.location.reload();
-                // Show success message
-                loadingText.textContent = 'Reset successfully!';
-                loadingText.style.color = '#4CAF50'; // Green color for success
-                // reload the page to reset the form elements
-                setTimeout(() => {
-                    loadingText.textContent = ''; // Clear text
-                }, 1000); // Clear the message after 1 seconds
-            }, 1000); // Short delay to make the animation visible
-        });
-        // Run button: AI logic to fill the form fields
-        run_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
-            const loadingText = cleverfiller_container.querySelector('#cf-console-log');
-            loadingText.textContent = 'Loading...';
-            loadingText.style.color = '#4a90e2'; // Blue color for loading
-            // Disable the button while processing
-            run_button.disabled = true;
-            // Validate settings
-            if (api_input.value === '' || context_input.value === '') {
-                // Show error message if API or context is empty
-                loadingText.textContent = 'Incorrect API or empty context';
-                loadingText.style.color = '#f44336'; // Red color for error
-                // Clear the message after 2 seconds
-                setTimeout(() => {
-                    loadingText.textContent = '';
-                    run_button.disabled = false;
-                }, 2000);
-                return;
-            }
-            ElementCache.length = 0; // Clear the ElementCache before processing
-            hover_overlay_handler(scan_form_elements()); // Re-scan the form elements
-            // Check if elements are available in the ElementCache
-            if (ElementCache.length === 0) {
-                loadingText.textContent = 'No form elements selected.';
-                loadingText.style.color = '#ff9800'; // Warning color
-                setTimeout(() => {
-                    loadingText.textContent = '';
-                    run_button.disabled = false;
-                }, 2000);
-                return;
-            }
-            // Show loading message with the number of fields to be filled
-            loadingText.textContent = `Preparing to fill ${ElementCache.length} form fields...`;
-            loadingText.style.color = '#4a90e2'; // Blue color for loading
-            // Short delay so user can see the initial count
-            yield new Promise(resolve => setTimeout(resolve, 800));
-            try {
-                // Process each field with AI
-                for (let i = 0; i < ElementCache.length; i++) {
-                    // Use ElementCache to process DOM
-                    // Use EnlistArray to get element attributes that are better for AI model to process.
-                    // The fillable elements should be consistent with both arrays.
-                    const cached_element = ElementCache[i];
-                    const enlisted_element_attr = EnlistArray[i].attributeValues;
-                    // Change the style of the element to indicate processing
-                    cached_element.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-                    cached_element.style.border = '2px solid #4a90e2';
-                    // Update loading text with current status
-                    loadingText.textContent = `Processing field ${i + 1}/${ElementCache.length}...`;
-                    try {
-                        // Create a prompt: context_input contains the context information, and enlisted_element contains the field information.
-                        const prompt = create_prompt(context_input.value, enlisted_element_attr);
-                        // Show specific field information
-                        if (enlisted_element_attr.labelText) {
-                            loadingText.textContent = `Processing ${enlisted_element_attr.labelText} (${i + 1}/${ElementCache.length})...`;
-                        }
-                        // Call the DeepSeek API with the prompt
-                        const response = yield call_deepseek_api(prompt);
-                        // Get the string value from the response that contains only the value of the field.
-                        const fieldValue = parse_ai_response(response);
-                        console.log('[CleverFiller] Field Value:', fieldValue);
-                        // TODO: Support more types of elements and stream the response to the element.
-                        fill_form(cached_element, fieldValue);
-                    }
-                    catch (error) {
-                        console.error('Error processing field:', error);
-                        loadingText.textContent = `Error processing field ${i + 1}/${ElementCache.length}`;
-                        loadingText.style.color = '#f44336'; // Red color for error
-                    }
-                }
-                // Show success
-            }
-            catch (error) {
-                // Handle errors
-                console.error('Error filling form:', error);
-                loadingText.textContent = 'Check the console for errors.';
-                loadingText.style.color = '#f44336'; // Red for error
-            }
-            finally {
-                // Always re-enable the button and clear message after delay
-                setTimeout(() => {
-                    run_button.disabled = false;
-                    loadingText.textContent = '';
-                }, 1000);
-            }
-        }));
     }, 500);
     setupTabNavigation(cleverfiller_container);
 }
@@ -690,171 +604,119 @@ function add_dropdown_button_listener(cleverfiller_container) {
         }
     });
     preload_button === null || preload_button === void 0 ? void 0 : preload_button.addEventListener('click', () => {
-        hover_overlay_handler_for_loader_button(scan_form_elements(), 'preload');
+        hover_overlay_handler_for_load_button(scan_form_elements(), 'preload');
     });
     afterload_button === null || afterload_button === void 0 ? void 0 : afterload_button.addEventListener('click', () => {
-        hover_overlay_handler_for_loader_button(scan_form_elements(), 'afterload');
+        hover_overlay_handler_for_load_button(scan_form_elements(), 'afterload');
     });
 }
-function hover_overlay_handler_for_loader_button(elements, loader_method) {
-    // Clear existing overlays if any
-    const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove, .cleverfiller-hover-overlay-preload');
-    existingOverlays.forEach(overlay => overlay.remove());
-    if (loader_method === 'preload') {
-        for (const element of Array.from(elements)) {
-            const elementSignature = create_element_signature(element);
-            // Check if element is already in PreloadArray
-            let isAlreadyEnlisted = false;
-            for (const enlistedElement of PreloadArray) {
-                const enlistedSignature = create_element_signature(enlistedElement);
-                if (elementSignature === enlistedSignature) {
-                    isAlreadyEnlisted = true;
-                    PreloadCache.push(element); // Add to cache
-                    break;
+function add_hide_button_listener(hide_button, container) {
+    hide_button.addEventListener('click', () => {
+        container.style.display = 'none';
+    });
+}
+function add_enlist_button_listener(enlist_button, container) {
+    enlist_button.addEventListener('click', () => {
+        const inputtable_elements = scan_form_elements();
+        highlight_form_elements(inputtable_elements);
+        hover_overlay_handler_for_enlist_button(inputtable_elements);
+        update_enlist_count();
+    });
+}
+function add_reset_button_listener(reset_button, container) {
+    reset_button.addEventListener('click', () => {
+        const loadingText = container.querySelector('#cf-console-log');
+        loadingText.textContent = 'Reset the elements...';
+        setTimeout(() => {
+            EnlistArray.length = 0;
+            EnlistCache.length = 0;
+            GM_setValue(get_window_url(), { enlist: EnlistArray });
+            window.location.reload();
+            loadingText.textContent = 'Reset successfully!';
+            loadingText.style.color = '#4CAF50'; // Green color for success
+            setTimeout(() => {
+                loadingText.textContent = ''; // Clear text
+            }, 1000);
+        }, 1000);
+    });
+}
+function add_run_button_listener(run_button, container) {
+    run_button.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
+        const loadingText = container.querySelector('#cf-console-log');
+        const api_input = container.querySelector('#cf-api-input');
+        const context_input = container.querySelector('#cf-context-textarea');
+        loadingText.textContent = 'Loading...';
+        loadingText.style.color = '#4a90e2'; // Blue color for loading
+        run_button.disabled = true;
+        if (api_input.value === '' || context_input.value === '') {
+            loadingText.textContent = 'Incorrect API or empty context';
+            loadingText.style.color = '#f44336'; // Red color for error
+            setTimeout(() => {
+                loadingText.textContent = '';
+                run_button.disabled = false;
+            }, 2000);
+            return;
+        }
+        EnlistCache.length = 0;
+        hover_overlay_handler_for_enlist_button(scan_form_elements());
+        if (EnlistCache.length === 0) {
+            loadingText.textContent = 'No form elements selected.';
+            loadingText.style.color = '#ff9800'; // Warning color
+            setTimeout(() => {
+                loadingText.textContent = '';
+                run_button.disabled = false;
+            }, 2000);
+            return;
+        }
+        const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove, .cleverfiller-hover-overlay-preload');
+        existingOverlays.forEach(overlay => overlay.remove());
+        loadingText.textContent = `Preparing to fill ${EnlistCache.length} form fields...`;
+        loadingText.style.color = '#4a90e2';
+        yield new Promise(resolve => setTimeout(resolve, 800));
+        try {
+            if (PreloadCache.length > 0) {
+                loadingText.textContent = `Executing ${PreloadCache.length} pre-fill actions...`;
+                for (let i = 0; i < PreloadCache.length; i++) {
+                    const element = PreloadCache[i];
+                    loadingText.textContent = `Executing pre-fill action ${i + 1}/${PreloadCache.length}...`;
+                    element.click();
+                    yield new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
-            // Create a hover overlay for the element
-            const rect = element.getBoundingClientRect();
-            const overlay = document.createElement('div');
-            overlay.className = isAlreadyEnlisted ? 'cleverfiller-hover-overlay-remove' : 'cleverfiller-hover-overlay-add';
-            // Common styles for both overlays
-            overlay.style.position = 'absolute';
-            overlay.style.top = `${rect.top + window.scrollY - 5}px`;
-            overlay.style.left = `${rect.left - 5}px`;
-            overlay.style.width = `${rect.width + 10}px`;
-            overlay.style.height = `${rect.height + 10}px`;
-            overlay.style.zIndex = '999';
-            overlay.style.cursor = 'pointer';
-            overlay.style.border = '2px dashed transparent';
-            overlay.style.boxSizing = 'border-box';
-            if (isAlreadyEnlisted) {
-                // Styles for removing elements
-                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
-                // Hover overlay event listeners for removing elements
-                overlay.addEventListener('mouseover', () => {
-                    overlay.style.border = '2px dashed #f44336';
-                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
-                    overlay.innerHTML = '<div style="background: rgba(244, 67, 54, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Remove</div>';
-                });
-                overlay.addEventListener('mouseout', () => {
-                    overlay.style.border = '2px dashed transparent';
-                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
-                    overlay.innerHTML = '';
-                });
-                overlay.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    overlay.remove();
-                    remove_preload_element(element);
-                    // reload this function to load again
-                    hover_overlay_handler_for_loader_button(elements, 'preload');
-                });
-            }
-            else {
-                // Styles for adding elements
-                overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-                // Hover overlay event listeners for adding elements
-                overlay.addEventListener('mouseover', () => {
-                    overlay.style.border = '2px dashed #4a90e2';
-                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.2)';
-                    overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Add to Preload</div>';
-                });
-                overlay.addEventListener('mouseout', () => {
-                    overlay.style.border = '2px dashed transparent';
-                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-                    overlay.innerHTML = '';
-                });
-                overlay.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    overlay.remove();
-                    // Add to preload
-                    const extracted_data = extract_data_for_enlist_storage(element);
-                    PreloadArray.push(extracted_data);
-                    PreloadCache.push(element);
-                    GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { preload: PreloadArray }));
-                    // reload this function to update UI
-                    hover_overlay_handler_for_loader_button(elements, 'preload');
-                });
-            }
-            document.body.appendChild(overlay);
-        }
-    }
-    else if (loader_method === 'afterload') {
-        for (const element of Array.from(elements)) {
-            const elementSignature = create_element_signature(element);
-            // Check if element is already in AfterloadArray
-            let isAlreadyEnlisted = false;
-            for (const enlistedElement of AfterloadArray) {
-                const enlistedSignature = create_element_signature(enlistedElement);
-                if (elementSignature === enlistedSignature) {
-                    isAlreadyEnlisted = true;
-                    AfterloadCache.push(element); // Add to cache
-                    break;
+            for (let i = 0; i < EnlistCache.length; i++) {
+                const cached_element = EnlistCache[i];
+                const enlisted_element_attr = EnlistArray[i].attributeValues;
+                cached_element.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
+                cached_element.style.border = '2px solid #4a90e2';
+                loadingText.textContent = `Processing field ${i + 1}/${EnlistCache.length}...`;
+                try {
+                    const prompt = create_prompt(context_input.value, enlisted_element_attr);
+                    if (enlisted_element_attr.labelText) {
+                        loadingText.textContent = `Processing ${enlisted_element_attr.labelText} (${i + 1}/${EnlistCache.length})...`;
+                    }
+                    const response = yield call_deepseek_api(prompt);
+                    const fieldValue = parse_ai_response(response);
+                    console.log('[CleverFiller] Field Value:', fieldValue);
+                    fill_form(cached_element, fieldValue);
+                }
+                catch (error) {
+                    console.error('Error processing field:', error);
+                    loadingText.textContent = `Error processing field ${i + 1}/${EnlistCache.length}`;
+                    loadingText.style.color = '#f44336';
                 }
             }
-            // Create hover overlay with similar logic as preload
-            const rect = element.getBoundingClientRect();
-            const overlay = document.createElement('div');
-            overlay.className = isAlreadyEnlisted ? 'cleverfiller-hover-overlay-remove' : 'cleverfiller-hover-overlay-add';
-            // Common styles for both overlays
-            overlay.style.position = 'absolute';
-            overlay.style.top = `${rect.top + window.scrollY - 5}px`;
-            overlay.style.left = `${rect.left - 5}px`;
-            overlay.style.width = `${rect.width + 10}px`;
-            overlay.style.height = `${rect.height + 10}px`;
-            overlay.style.zIndex = '999';
-            overlay.style.cursor = 'pointer';
-            overlay.style.border = '2px dashed transparent';
-            overlay.style.boxSizing = 'border-box';
-            if (isAlreadyEnlisted) {
-                // Styles for removing elements
-                overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
-                // Hover overlay event listeners for removing elements
-                overlay.addEventListener('mouseover', () => {
-                    overlay.style.border = '2px dashed #f44336';
-                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
-                    overlay.innerHTML = '<div style="background: rgba(244, 67, 54, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Remove</div>';
-                });
-                overlay.addEventListener('mouseout', () => {
-                    overlay.style.border = '2px dashed transparent';
-                    overlay.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
-                    overlay.innerHTML = '';
-                });
-                overlay.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    overlay.remove();
-                    remove_afterload_element(element); // 修正：使用 afterload 的移除函数
-                    // reload this function to load again
-                    hover_overlay_handler_for_loader_button(elements, 'afterload');
-                });
-            }
-            else {
-                // Styles for adding elements
-                overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-                // Hover overlay event listeners for adding elements
-                overlay.addEventListener('mouseover', () => {
-                    overlay.style.border = '2px dashed #4a90e2';
-                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.2)';
-                    overlay.innerHTML = '<div style="background: rgba(74, 144, 226, 0.8); color: white; font-size: 12px; padding: 4px; border-radius: 3px; position: absolute; top: 0; right: 0;">Add to Afterload</div>';
-                });
-                overlay.addEventListener('mouseout', () => {
-                    overlay.style.border = '2px dashed transparent';
-                    overlay.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-                    overlay.innerHTML = '';
-                });
-                overlay.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    overlay.remove();
-                    // Add to afterload
-                    const extracted_data = extract_data_for_enlist_storage(element);
-                    AfterloadArray.push(extracted_data);
-                    AfterloadCache.push(element);
-                    GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { afterload: AfterloadArray }));
-                    // reload this function to update UI
-                    hover_overlay_handler_for_loader_button(elements, 'afterload');
-                });
-            }
-            document.body.appendChild(overlay);
         }
-    }
+        catch (error) {
+            console.error('Error filling form:', error);
+            loadingText.textContent = 'Check the console for errors.';
+            loadingText.style.color = '#f44336';
+        }
+        finally {
+            setTimeout(() => {
+                run_button.disabled = false;
+                loadingText.textContent = '';
+            }, 1000);
+        }
+    }));
 }
 createUI();
