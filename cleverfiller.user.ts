@@ -15,7 +15,7 @@
 // @grant        GM_getResourceText
 // @grant        GM_getResourceURL
 // @grant        GM_info
-// @resource     index file:///C:/Users/Yikai/.github/cleverfiller/html/dashboard.html
+// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/refs/heads/dev/html/dashboard.html
 // @run-at       document-start
 // ==/UserScript==
 
