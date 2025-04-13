@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      2.3.0
+// @version      3.0.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -156,9 +156,9 @@ function parse_ai_response(response) {
 // -----------------------------------------------------------
 // DOM Manipulation Functions
 // -----------------------------------------------------------
-// 2025.04.11: Tweaked style of highlighted elements.
+// 2025.04.12: Updated to handle FormElement array type
 function highlight_form_elements(elements) {
-    for (const element of Array.from(elements)) {
+    for (const element of elements) {
         element.style = `
         background-color: #e0f7fa;
         border: 2px solid #4a90e2;
@@ -167,6 +167,7 @@ function highlight_form_elements(elements) {
         `;
     }
 }
+// 2025.04.12: Updated to handle FormElement array type
 function create_hover_overlays(elements, cacheArray, dataArray, addCallback, removeCallback, addColor, removeColor, addLabel, removeLabel) {
     // Clear existing overlays if any
     const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove');
@@ -177,7 +178,7 @@ function create_hover_overlays(elements, cacheArray, dataArray, addCallback, rem
         const signature = create_element_signature(data);
         dataMap.set(signature, data);
     });
-    for (const element of Array.from(elements)) {
+    for (const element of elements) {
         const elementSignature = create_element_signature(element);
         const isAlreadyEnlisted = dataMap.has(elementSignature);
         if (isAlreadyEnlisted) {
@@ -240,6 +241,7 @@ function create_hover_overlays(elements, cacheArray, dataArray, addCallback, rem
         document.body.appendChild(overlay);
     }
 }
+// 2025.04.12: Updated to handle FormElement array type
 function hover_overlay_handler_for_enlist_button(elements) {
     create_hover_overlays(elements, EnlistCache, EnlistArray, enlist_element, remove_enlist_element, 'rgba(74, 144, 226, 0.1)', // Add color
     'rgba(244, 67, 54, 0.1)', // Remove color
@@ -247,6 +249,7 @@ function hover_overlay_handler_for_enlist_button(elements) {
     'Remove' // Remove label
     );
 }
+// 2025.04.12: Updated to handle FormElement array type
 function hover_overlay_handler_for_load_button(elements, loader_method) {
     if (loader_method === 'preload') {
         create_hover_overlays(elements, PreloadCache, PreloadArray, (element) => {
@@ -254,6 +257,7 @@ function hover_overlay_handler_for_load_button(elements, loader_method) {
             PreloadArray.push(data);
             PreloadCache.push(element);
             GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { preload: PreloadArray }));
+            update_load_count(); // 添加这一行来更新badge
         }, remove_preload_element, 'rgba(74, 144, 226, 0.1)', // Add color
         'rgba(244, 67, 54, 0.1)', // Remove color
         'Add to Preload', // Add label
@@ -266,6 +270,7 @@ function hover_overlay_handler_for_load_button(elements, loader_method) {
             AfterloadArray.push(data);
             AfterloadCache.push(element);
             GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { afterload: AfterloadArray }));
+            update_load_count(); // 添加这一行来更新badge
         }, remove_afterload_element, 'rgba(74, 144, 226, 0.1)', // Add color
         'rgba(244, 67, 54, 0.1)', // Remove color
         'Add to Afterload', // Add label
@@ -273,6 +278,7 @@ function hover_overlay_handler_for_load_button(elements, loader_method) {
         );
     }
 }
+// Make sure the fill_form function can handle buttons correctly
 function fill_form(element, value) {
     // Fill the form element with the value
     if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
@@ -297,6 +303,10 @@ function fill_form(element, value) {
             }, 100);
         }
     }
+    else if (element.tagName === 'BUTTON') {
+        // For buttons, we don't set values but could trigger a click if needed
+        console.log(`[CleverFiller] Button element - no value to set: "${element.textContent}"`);
+    }
     // Reset any special styling applied during processing
     setTimeout(() => {
         element.style.backgroundColor = '';
@@ -306,24 +316,52 @@ function fill_form(element, value) {
 // -----------------------------------------------------------
 // Core Functionality
 // -----------------------------------------------------------
-// 2025.04.11: Fixed the issue where the script was not able to find the form elements correctly.
-function scan_form_elements() {
-    const allInputs = document.querySelectorAll('input, textarea, select');
-    // Exclude elements within div[id="cleverfiller-container"]
-    const filteredInputs = Array.from(allInputs).filter(input => {
-        const parentDiv = input.closest('div#cleverfiller-container');
-        return !parentDiv;
-    });
-    return filteredInputs;
+// Define default selectors for form element scanning
+const DEFAULT_ENLIST_TAGS = 'input, textarea, select, button';
+const DEFAULT_LOAD_TAGS = 'button[type="submit"], input[type="submit"], button.submit, a.btn';
+// 2025.04.14: Updated to initialize default values for custom CSS selectors
+function initialize_default_selectors() {
+    // Only set defaults if they don't already exist in GM_Value
+    if (GM_getValue('enlist_tags', null) === null) {
+        GM_setValue('enlist_tags', DEFAULT_ENLIST_TAGS);
+        console.log('[CleverFiller] Initialized default enlist tags:', DEFAULT_ENLIST_TAGS);
+    }
+    if (GM_getValue('load_tags', null) === null) {
+        GM_setValue('load_tags', DEFAULT_LOAD_TAGS);
+        console.log('[CleverFiller] Initialized default load tags:', DEFAULT_LOAD_TAGS);
+    }
+}
+// 2025.04.14: Enhanced to support custom CSS selectors with improved defaults
+function scan_form_elements(customSelector) {
+    // Use custom selector if provided, otherwise use the saved selector or default
+    const savedSelector = customSelector || GM_getValue('enlist_tags', DEFAULT_ENLIST_TAGS);
+    const selector = savedSelector || DEFAULT_ENLIST_TAGS;
+    try {
+        const allInputs = document.querySelectorAll(selector);
+        // Exclude elements within div[id="cleverfiller-container"]
+        const filteredInputs = Array.from(allInputs).filter(input => {
+            const parentDiv = input.closest('div#cleverfiller-container');
+            return !parentDiv;
+        });
+        console.log(`[CleverFiller] Found ${filteredInputs.length} elements with selector: ${selector}`);
+        return filteredInputs;
+    }
+    catch (error) {
+        console.error(`[CleverFiller] Invalid selector: ${selector}`, error);
+        // Fallback to default selector if custom one fails
+        const defaultInputs = document.querySelectorAll(DEFAULT_ENLIST_TAGS);
+        return Array.from(defaultInputs).filter(input => !input.closest('div#cleverfiller-container'));
+    }
 }
 // TODO: Improve the logic to find the label text of the element.
 function get_label_text(element) {
     var _a, _b, _c, _d;
     // Get the label text of the element
     const label_text = element.closest('div') ? ((_b = (_a = element.closest('div')) === null || _a === void 0 ? void 0 : _a.querySelector('label')) === null || _b === void 0 ? void 0 : _b.textContent) || '' : ''; // Get the parent <div> element
-    const placeholder_text = element.placeholder || ''; // Get the placeholder text
+    const placeholder_text = ('placeholder' in element) ? element.placeholder || '' : ''; // Get the placeholder text if available
     const table_label = element.closest('tr') ? ((_d = (_c = element.closest('tr')) === null || _c === void 0 ? void 0 : _c.querySelector('tr')) === null || _d === void 0 ? void 0 : _d.textContent) || '' : ''; // Get the parent <tr> element
-    const label = label_text || placeholder_text || table_label; // Use the label text or placeholder text if available
+    const button_text = element.tagName === 'BUTTON' ? element.textContent || '' : ''; // Get the text content for button elements
+    const label = label_text || placeholder_text || table_label || button_text; // Use available text in priority order
     return label; // Return the label text
 }
 // Get all attributes from HTML element and return them as an object
@@ -342,7 +380,6 @@ function filter_redundant_attributes(element) {
     const excludeAttributes = [
         'style',
         'class',
-        'value',
         'tabindex',
         'disabled',
         'readonly',
@@ -435,6 +472,7 @@ function remove_preload_element(element) {
             preload: PreloadArray,
             afterload: currentData.afterload || []
         });
+        update_load_count(); // Update load count after removing from preload
     }
 }
 function remove_afterload_element(element) {
@@ -452,6 +490,7 @@ function remove_afterload_element(element) {
             preload: currentData.preload || [],
             afterload: AfterloadArray
         });
+        update_load_count(); // Update load count after removing from afterload
     }
 }
 // Extract data to create the enlist object
@@ -513,12 +552,31 @@ function update_enlist_count() {
         }
     }
 }
+function update_load_count() {
+    const countBadge = document.querySelector('#cf-load-count');
+    if (countBadge) {
+        const total_load_count = PreloadArray.length + AfterloadArray.length;
+        if (total_load_count === 0) {
+            countBadge.style.display = 'none'; // Hide the badge if no elements are enlisted
+        }
+        else {
+            countBadge.style.display = 'flex';
+            countBadge.textContent = total_load_count.toString();
+        }
+    }
+}
 function setup_auto_save(container) {
     const api_input = container.querySelector('#cf-api-input');
     const model_option = container.querySelector('#cf-model-select');
     const context_input = container.querySelector('#cf-context-textarea');
     const workflow_mode = container.querySelector('#cf-workflow-mode');
     const initial_display = container.querySelector('#cf-initial-display');
+    // 2025.04.13: Added tag inputs for saving custom selectors
+    const enlist_tags = container.querySelector('#cf-enlist-tags');
+    const load_tags = container.querySelector('#cf-load-tags');
+    // 2025.04.14: Add reset buttons for tag fields
+    const reset_enlist_tags_button = container.querySelector('#cf-reset-enlist-tags');
+    const reset_load_tags_button = container.querySelector('#cf-reset-load-tags');
     const save_value = (key, value) => {
         GM_setValue(key, value);
     };
@@ -527,9 +585,42 @@ function setup_auto_save(container) {
     context_input.addEventListener('input', () => save_value('context', context_input.value));
     workflow_mode.addEventListener('change', () => save_value('workflow_mode', workflow_mode.checked));
     initial_display.addEventListener('change', () => save_value('initial_display', initial_display.checked));
+    // 2025.04.13: Add event listeners for tag inputs
+    enlist_tags.addEventListener('input', () => save_value('enlist_tags', enlist_tags.value));
+    load_tags.addEventListener('input', () => save_value('load_tags', load_tags.value));
+    // 2025.04.14: Add event listeners for reset buttons
+    if (reset_enlist_tags_button) {
+        reset_enlist_tags_button.addEventListener('click', () => {
+            enlist_tags.value = DEFAULT_ENLIST_TAGS;
+            save_value('enlist_tags', DEFAULT_ENLIST_TAGS);
+            console.log('[CleverFiller] Reset enlist tags to default:', DEFAULT_ENLIST_TAGS);
+        });
+    }
+    if (reset_load_tags_button) {
+        reset_load_tags_button.addEventListener('click', () => {
+            load_tags.value = DEFAULT_LOAD_TAGS;
+            save_value('load_tags', DEFAULT_LOAD_TAGS);
+            console.log('[CleverFiller] Reset load tags to default:', DEFAULT_LOAD_TAGS);
+        });
+    }
+}
+// Add function to reset tags to default values
+function reset_tags_to_default() {
+    GM_setValue('enlist_tags', DEFAULT_ENLIST_TAGS);
+    GM_setValue('load_tags', DEFAULT_LOAD_TAGS);
+    // Update UI if elements exist
+    const enlistTagsInput = document.querySelector('#cf-enlist-tags');
+    const loadTagsInput = document.querySelector('#cf-load-tags');
+    if (enlistTagsInput)
+        enlistTagsInput.value = DEFAULT_ENLIST_TAGS;
+    if (loadTagsInput)
+        loadTagsInput.value = DEFAULT_LOAD_TAGS;
+    console.log('[CleverFiller] Reset tags to default values');
 }
 // 2025-04-11 @ 11:28:50: Extracted the HTML to a separate file for better maintainability.
 function createUI() {
+    // Initialize default selectors on startup
+    initialize_default_selectors();
     // Create the container div and set its properties
     const container = document.createElement('div');
     const container_html = GM_getResourceText('index');
@@ -552,6 +643,11 @@ function createUI() {
     workflow_mode.checked = GM_getValue('workflow_mode', false);
     const initial_display = container.querySelector('#cf-initial-display');
     initial_display.checked = GM_getValue('initial_display', false);
+    // 2025.04.14: Load tag inputs from saved settings with defaults
+    const enlist_tags = container.querySelector('#cf-enlist-tags');
+    enlist_tags.value = GM_getValue('enlist_tags', DEFAULT_ENLIST_TAGS);
+    const load_tags = container.querySelector('#cf-load-tags');
+    load_tags.value = GM_getValue('load_tags', DEFAULT_LOAD_TAGS);
     // Initially show or hide the container
     if (initial_display.checked) {
         cleverfiller_container.style.display = 'block';
@@ -577,13 +673,14 @@ function createUI() {
     const run_button = cleverfiller_container.querySelector('#cf-run-button');
     const reset_button = cleverfiller_container.querySelector('#cf-reset-button');
     add_hide_button_listener(hide_button, cleverfiller_container);
-    add_enlist_button_listener(enlist_button, cleverfiller_container);
+    add_enlist_button_listener(enlist_button);
     add_reset_button_listener(reset_button, cleverfiller_container);
     add_run_button_listener(run_button, cleverfiller_container);
     setTimeout(() => {
         // Set up auto-save functionality
         setup_auto_save(cleverfiller_container);
         update_enlist_count();
+        update_load_count(); // Update load count on initial load
     }, 500);
     setupTabNavigation(cleverfiller_container);
 }
@@ -604,10 +701,16 @@ function add_dropdown_button_listener(cleverfiller_container) {
         }
     });
     preload_button === null || preload_button === void 0 ? void 0 : preload_button.addEventListener('click', () => {
-        hover_overlay_handler_for_load_button(scan_form_elements(), 'preload');
+        // 2025.04.14: Use saved load tags or default for preload button
+        const customSelector = GM_getValue('load_tags', DEFAULT_LOAD_TAGS);
+        hover_overlay_handler_for_load_button(scan_form_elements(customSelector), 'preload');
+        update_load_count();
     });
     afterload_button === null || afterload_button === void 0 ? void 0 : afterload_button.addEventListener('click', () => {
-        hover_overlay_handler_for_load_button(scan_form_elements(), 'afterload');
+        // 2025.04.14: Use saved load tags or default for afterload button
+        const customSelector = GM_getValue('load_tags', DEFAULT_LOAD_TAGS);
+        hover_overlay_handler_for_load_button(scan_form_elements(customSelector), 'afterload');
+        update_load_count();
     });
 }
 function add_hide_button_listener(hide_button, container) {
@@ -615,9 +718,11 @@ function add_hide_button_listener(hide_button, container) {
         container.style.display = 'none';
     });
 }
-function add_enlist_button_listener(enlist_button, container) {
+function add_enlist_button_listener(enlist_button) {
     enlist_button.addEventListener('click', () => {
-        const inputtable_elements = scan_form_elements();
+        // 2025.04.14: Use saved enlist tags or default
+        const customSelector = GM_getValue('enlist_tags', DEFAULT_ENLIST_TAGS);
+        const inputtable_elements = scan_form_elements(customSelector);
         highlight_form_elements(inputtable_elements);
         hover_overlay_handler_for_enlist_button(inputtable_elements);
         update_enlist_count();
@@ -657,9 +762,18 @@ function add_run_button_listener(run_button, container) {
             }, 2000);
             return;
         }
+        // 分别处理enlist和load元素
         EnlistCache.length = 0;
-        hover_overlay_handler_for_enlist_button(scan_form_elements());
-        if (EnlistCache.length === 0) {
+        PreloadCache.length = 0; // 确保清空PreloadCache
+        AfterloadCache.length = 0; // 确保清空AfterloadCache
+        // 扫描enlist元素
+        const enlistSelector = GM_getValue('enlist_tags', DEFAULT_ENLIST_TAGS);
+        hover_overlay_handler_for_enlist_button(scan_form_elements(enlistSelector));
+        // 扫描load元素 (preload)
+        const loadSelector = GM_getValue('load_tags', DEFAULT_LOAD_TAGS);
+        hover_overlay_handler_for_load_button(scan_form_elements(loadSelector), 'preload');
+        // 检查是否有任何元素可以处理
+        if (EnlistCache.length === 0 && PreloadCache.length === 0 && AfterloadCache.length === 0) {
             loadingText.textContent = 'No form elements selected.';
             loadingText.style.color = '#ff9800'; // Warning color
             setTimeout(() => {
@@ -670,7 +784,9 @@ function add_run_button_listener(run_button, container) {
         }
         const existingOverlays = document.querySelectorAll('.cleverfiller-hover-overlay-add, .cleverfiller-hover-overlay-remove, .cleverfiller-hover-overlay-preload');
         existingOverlays.forEach(overlay => overlay.remove());
-        loadingText.textContent = `Preparing to fill ${EnlistCache.length} form fields...`;
+        // 更新消息以反映实际情况
+        const totalFields = EnlistCache.length + PreloadCache.length;
+        loadingText.textContent = `Preparing to process ${totalFields} elements...`;
         loadingText.style.color = '#4a90e2';
         yield new Promise(resolve => setTimeout(resolve, 800));
         try {
