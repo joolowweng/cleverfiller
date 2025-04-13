@@ -31,13 +31,6 @@
                     </div>
 
                     <h3>General</h3>
-                    <div class="cf-toggle-field">
-                        <label for="cf-workflow-mode">Enable workflow mode</label>
-                        <label class="switch">
-                            <input type="checkbox" id="cf-workflow-mode" class="cf-input-switch">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
 
                     <div class="cf-toggle-field">
                         <label for="cf-initial-display">Show panel when start</label>
@@ -46,9 +39,10 @@
                             <span class="slider"></span>
                         </label>
                     </div>
+                    <span class="cf-explanation">To disable this setting, you have to use keyboard shortcut (Alt + S) to
+                        show panel again</span>
 
                     <h3>Advanced</h3>
-
                     <div class="cf-input-field">
                         <label for="cf-enlist-tags">Enlist tags</label>
                         <input type="text" id="cf-enlist-tags" placeholder="input, textarea, select, button">
@@ -374,7 +368,8 @@
     .cf-toggle-field {
         display: flex;
         align-items: center;
-        margin-bottom: 16px;
+        margin-bottom: 8px;
+        /* Reduced margin to account for explanation text below */
     }
 
     .cf-toggle-field label:first-child {
@@ -426,6 +421,18 @@
 
     input.cf-input-switch:checked+span.slider {
         background-color: #4a90e2;
+    }
+
+    /* Style for explanation text */
+    .cf-explanation {
+        display: block;
+        margin-top: -8px;
+        margin-bottom: 16px;
+        padding-left: 0;
+        font-size: 12px;
+        color: #888;
+        line-height: 1.4;
+        font-weight: normal;
     }
 
     /* 统一毛玻璃按钮样式 */
@@ -628,7 +635,7 @@
     .cf-loading {
         display: flex;
         align-items: center;
-        margin-top: 16px;
+        margin-top: 30px;
         justify-content: center;
         min-height: 30px;
         position: relative;

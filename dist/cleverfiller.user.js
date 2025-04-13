@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      2.5.0
+// @version      2.5.1
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -569,7 +569,6 @@ function setup_auto_save(container) {
     const api_input = container.querySelector('#cf-api-input');
     const model_option = container.querySelector('#cf-model-select');
     const context_input = container.querySelector('#cf-context-textarea');
-    const workflow_mode = container.querySelector('#cf-workflow-mode');
     const initial_display = container.querySelector('#cf-initial-display');
     // 2025.04.13: Added tag inputs for saving custom selectors
     const enlist_tags = container.querySelector('#cf-enlist-tags');
@@ -583,7 +582,6 @@ function setup_auto_save(container) {
     api_input.addEventListener('input', () => save_value('api', api_input.value));
     model_option.addEventListener('change', () => save_value('model', model_option.value));
     context_input.addEventListener('input', () => save_value('context', context_input.value));
-    workflow_mode.addEventListener('change', () => save_value('workflow_mode', workflow_mode.checked));
     initial_display.addEventListener('change', () => save_value('initial_display', initial_display.checked));
     // 2025.04.13: Add event listeners for tag inputs
     enlist_tags.addEventListener('input', () => save_value('enlist_tags', enlist_tags.value));
@@ -639,8 +637,6 @@ function createUI() {
     model_option.value = GM_getValue('model', 'deepseek-chat');
     const context_input = container.querySelector('#cf-context-textarea');
     context_input.value = GM_getValue('context', '');
-    const workflow_mode = container.querySelector('#cf-workflow-mode');
-    workflow_mode.checked = GM_getValue('workflow_mode', false);
     const initial_display = container.querySelector('#cf-initial-display');
     initial_display.checked = GM_getValue('initial_display', false);
     // 2025.04.14: Load tag inputs from saved settings with defaults
