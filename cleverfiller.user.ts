@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      2.0.2
+// @version      2.1.0
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -15,16 +15,30 @@
 // @grant        GM_getResourceText
 // @grant        GM_getResourceURL
 // @grant        GM_info
-// @resource     index https://raw.githubusercontent.com/joolowweng/cleverfiller/refs/heads/dev/html/index.html
+// @resource     index file:///C:/Users/Yikai/.github/cleverfiller/html/dashboard.html
 // @run-at       document-start
 // ==/UserScript==
 
 'use strict';
+interface current_url_cache {
+    [key: string]: Array<Record<string, any>>;
+    enlist: []
+    preload: []
+    afterload: []
+}
+const default_cache: current_url_cache = {
+    enlist: [],
+    preload: [],
+    afterload: []
+};
 
 // EnlistArray: Array to store enlisted elements
-const EnlistArray: Array<Record<string, any>> = GM_getValue(get_window_url(), []);
+const EnlistArray: Array<Record<string, any>> = GM_getValue(get_window_url(), default_cache).enlist || [];
 // ElementCache: Array to store the fillable elements that are currently in the DOM
 const ElementCache: HTMLElement[] = [];
+
+const PreloadArray: Array<Record<string, any>> = GM_getValue(get_window_url(), default_cache).preload || [];
+const AfterloadArray: Array<Record<string, any>> = GM_getValue(get_window_url(), default_cache).afterload || [];
 
 // General Utility Functions
 // -----------------------------------------------------------
@@ -375,7 +389,9 @@ function enlist_element(element: HTMLElement): void {
     if (!alreadyExists) {
         EnlistArray.push(extracted_enlist_data);
         ElementCache.push(element);
-        GM_setValue(get_window_url(), EnlistArray);
+        GM_setValue(get_window_url(), {
+            enlist: EnlistArray,
+        });
 
         update_enlist_count();
     }
@@ -391,7 +407,9 @@ function remove_enlist_element(element: HTMLElement): void {
     if (index !== -1) {
         EnlistArray.splice(index, 1); // Remove from EnlistArray
         ElementCache.splice(index, 1); // Remove from ElementCache
-        GM_setValue(get_window_url(), EnlistArray); // Update the storage
+        GM_setValue(get_window_url(), {
+            enlist: EnlistArray
+        }); // Update the storage
 
         update_enlist_count(); // Update the enlist count badge
     }
@@ -540,6 +558,7 @@ function createUI(): void {
     document.addEventListener('keydown', activate_clever_filler_display);
 
     // Add event listeners to the buttons
+    add_dropdown_button_listener(cleverfiller_container); // Add event listener to the dropdown button
     const hide_button = cleverfiller_container.querySelector('#cf-hide-button') as HTMLButtonElement;
     const enlist_button = cleverfiller_container.querySelector('#cf-enlist-button') as HTMLButtonElement;
     const run_button = cleverfiller_container.querySelector('#cf-run-button') as HTMLButtonElement;
@@ -580,7 +599,9 @@ function createUI(): void {
 
                 EnlistArray.length = 0;
                 ElementCache.length = 0;
-                GM_setValue(get_window_url(), EnlistArray);
+                GM_setValue(get_window_url(), {
+                    enlist: EnlistArray
+                });
                 window.location.reload();
 
                 // Show success message
@@ -706,8 +727,29 @@ function createUI(): void {
     setupTabNavigation(cleverfiller_container);
 }
 
-function workflow_mode_enable(): void {
+function add_dropdown_button_listener(cleverfiller_container: HTMLDivElement): void {
 
+    const dropdown_button = cleverfiller_container.querySelector('#cf-load-button');
+    const dropdown_container = cleverfiller_container.querySelector('.cf-dropdown-container');
+    const preload_button = cleverfiller_container.querySelector('#cf-preload-button');
+    const afterload_button = cleverfiller_container.querySelector('#cf-afterload-button');
+
+
+    dropdown_button?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (dropdown_container) {
+            dropdown_container.classList.toggle('active');
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (dropdown_container && !dropdown_container.contains(event.target as Node)) {
+            dropdown_container.classList.remove('active');
+        }
+    });
+
+    preload_button?.addEventListener('click', () => {
+
+    });
 
 }
 
