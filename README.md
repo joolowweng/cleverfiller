@@ -1,6 +1,8 @@
-![Example](assets/example.png)
+# CleverFiller
 
 English | [中文](docs/README-zh.md)
+
+![Example](assets/example.png)
 
 ## Overview
 

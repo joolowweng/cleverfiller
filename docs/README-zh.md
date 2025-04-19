@@ -1,6 +1,8 @@
-![Example](assets/example.png)
+# CleverFiller
 
 [English](../README.md) | 中文
+
+![Example](../assets/example.png)
 
 ## 概述
 
