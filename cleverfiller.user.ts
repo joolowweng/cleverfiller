@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      2.5.1
+// @version      2.5.4
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -120,37 +120,127 @@ async function call_deepseek_api<T>(prompt: string): Promise<T> {
     }
 }
 
-// 2025-04-11 @ 21:16:35: Changed the prompt and improved the parsing logic.
-function create_prompt(context: string, formData: Array<Record<string, unknown>>): string {
+function create_prompt(context: string, formData: Record<string, unknown>): string {
+    // 检查是否有选项数据
+    const options = formData['options'] || [];
+    const isSelect = formData['elementType'] === 'select' || (Array.isArray(options) && options.length > 0);
+
+    // 构建选项列表文本
+    let optionsText = '';
+    if (isSelect && Array.isArray(options)) {
+        optionsText = '\n\n**Available options:**\n';
+        (options as Array<{ value: string, text: string }>).forEach(option => {
+            optionsText += `- ${option.text} (value: ${option.value})\n`;
+        });
+        optionsText += '\nPlease return the exact option text from the list above.\n';
+    }
+
     const prompt = `
-        你是一个Web数据处理专家, 需要根据网页表单的字段信息, 结合我提供的文本信息, 判断这些字段的值应该是什么.
-        直接返回字符串格式的值, **不要任何解释**.
+    You are a precise web form data analysis expert. Based on the form field information and the provided text, determine the most appropriate value to fill in.
+    Always return the value in **English** (for example, for nationality, return "China" not "Chinese" or "中国"). Do not provide any explanation or extra text.
 
-        **工作流程**:
-        1. 仔细阅读用户提供的文本, 识别与每个JSON对象字段相关的信息
-        2. 如果文本信息没有明确标明的值或多个值, 请根据上下文进行合理推测.
-        3. 如果推断的值不确定, 请返回空字符串.
-        4. 如果文本信息中没有相关信息, 请返回空字符串.
+    **Analysis steps**:
+    1. Analyze the field name, label text, and attributes to determine what type of information it is (name, email, phone, nationality, etc.)
+    2. Find information in the text that is directly related to this field
+    3. Check data format according to field type:
+       - If it is an email, ensure the format is xxx@xxx.xxx
+       - If it is a phone number, ensure it is a valid phone format
+       - If it is a date, return in YYYY-MM-DD format
+       - If it is a select menu, always return the visible English option text exactly as shown in the dropdown (not a translation or description)${isSelect ? '\n       - For this select field, only return one of the provided options listed below' : ''}
 
-        -----------------------
+    **Field type**: ${formData['type'] || formData['elementType'] || 'text'}
+    **Field name**: ${formData['name'] || ''}
+    **Label text**: ${formData['labelText'] || ''}${optionsText}
 
-        **文本信息**:
-        ${context}
+    **Precise matching rules**:
+    - If an exact match is found, use it directly
+    - If there are multiple possible matches, choose the most relevant one
+    - Only infer if you are highly confident
+    - If you cannot determine the value, return an empty string
 
-        **JSON格式的字段信息**:
-        ${JSON.stringify(formData)}
+    -----------------------
 
+    **Context information**:
+    ${context}
+
+    **Field details**:
+    ${JSON.stringify(formData, null, 2)}
     `;
     return prompt;
 }
 
-function parse_ai_response(response: any): string {
+function parse_ai_response(response: any, element?: HTMLElement): string {
     try {
         const msg_content = response?.choices?.[0]?.message?.content;
         if (!msg_content) {
-            throw new Error('Invalid API response format')
+            throw new Error('Invalid API response format');
         }
-        return msg_content.trim();
+
+        let value = msg_content.trim();
+
+        if (element) {
+            const tagName = element.tagName.toLowerCase();
+            const inputType = element.getAttribute('type')?.toLowerCase() || '';
+
+            if (tagName === 'input') {
+                if (inputType === 'email' && (!value.includes('@') || !value.includes('.'))) {
+                    console.warn('[CleverFiller] Invalid email format:', value);
+                    value = '';
+                } else if (inputType === 'date') {
+                    const dateMatch = value.match(/\d{4}-\d{2}-\d{2}/);
+                    if (dateMatch) {
+                        value = dateMatch[0];
+                    } else {
+                        try {
+                            const parsedDate = new Date(value);
+                            if (!isNaN(parsedDate.getTime())) {
+                                value = parsedDate.toISOString().split('T')[0];
+                            }
+                        } catch {
+                            console.warn('[CleverFiller] Invalid date format:', value);
+                        }
+                    }
+                } else if (inputType === 'tel') {
+                    value = value.replace(/[^\d+\-().\s]/g, '');
+                } else if (inputType === 'number') {
+                    value = value.replace(/[^\d.-]/g, '');
+                }
+            } else if (tagName === 'select') {
+                const selectElement = element as HTMLSelectElement;
+                const options = Array.from(selectElement.options);
+
+                // 首先尝试通过选项文本精确匹配
+                let optionToSelect = options.find(opt =>
+                    opt.text.trim().toLowerCase() === value.trim().toLowerCase()
+                );
+
+                // 如果没找到，尝试通过值精确匹配
+                if (!optionToSelect) {
+                    optionToSelect = options.find(opt =>
+                        opt.value.toLowerCase() === value.toLowerCase()
+                    );
+                }
+
+                // 如果还是没有，尝试部分匹配文本
+                if (!optionToSelect) {
+                    optionToSelect = options.find(opt =>
+                        opt.text.toLowerCase().includes(value.trim().toLowerCase()) ||
+                        value.trim().toLowerCase().includes(opt.text.toLowerCase())
+                    );
+                }
+
+                if (optionToSelect) {
+                    console.log(`[CleverFiller] Select match found: "${value}" -> "${optionToSelect.text}" (${optionToSelect.value})`);
+                    value = optionToSelect.value;
+                } else {
+                    console.warn(`[CleverFiller] No matching option found for: "${value}"`);
+                    // 找不到匹配项，可能需要返回空或第一个选项
+                    value = '';
+                }
+            }
+        }
+
+        return value;
     } catch (error) {
         console.error('Failed to parse API response:', error);
         return '';
@@ -364,7 +454,18 @@ function fill_form(element: HTMLElement, value: string): void {
         }, 100);
     } else if (element.tagName === 'SELECT') {
         const selectElement = element as HTMLSelectElement;
-        const optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
+        let optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
+        if (!optionToSelect) {
+            optionToSelect = Array.from(selectElement.options).find(option =>
+                option.text.trim().toLowerCase() === value.trim().toLowerCase()
+            );
+        }
+        // If still not found, try partial match by text
+        if (!optionToSelect) {
+            optionToSelect = Array.from(selectElement.options).find(option =>
+                option.text.toLowerCase().includes(value.trim().toLowerCase())
+            );
+        }
         if (optionToSelect) {
             selectElement.value = optionToSelect.value;
 
@@ -597,10 +698,29 @@ function remove_afterload_element(element: HTMLElement): void {
 function extract_data_for_enlist_storage(element: HTMLElement): Record<string, any> {
     const labelText = get_label_text(element as HTMLInputElement);
     const attributeValues = filter_redundant_attributes(element);
+
+    // 为select元素收集所有选项
+    // Generated by Copilot
+    let options: Array<{ value: string; text: string }> = [];
+    interface SelectOption {
+        value: string;
+        text: string;
+    }
+    if (element.tagName === 'SELECT') {
+        const selectElement = element as HTMLSelectElement;
+        options = Array.from(selectElement.options).map(option => ({
+            value: option.value,
+            text: option.text
+        }));
+    }
+
     const data = {
         labelText: labelText,
-        attributeValues: attributeValues
+        attributeValues: attributeValues,
+        options: options,
+        elementType: element.tagName.toLowerCase()
     };
+
     return data;
 }
 // -----------------------------------------------------------
@@ -970,7 +1090,7 @@ function add_run_button_listener(run_button: HTMLButtonElement, container: HTMLD
                     }
 
                     const response = await call_deepseek_api(prompt);
-                    const fieldValue = parse_ai_response(response);
+                    const fieldValue = parse_ai_response(response, cached_element);
                     console.log('[CleverFiller] Field Value:', fieldValue);
                     fill_form(cached_element, fieldValue);
                 } catch (error) {

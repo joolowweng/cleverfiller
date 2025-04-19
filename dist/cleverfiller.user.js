@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CleverFiller
 // @namespace    https://github.com/joolowweng/cleverfiller
-// @version      2.5.1
+// @version      2.5.4
 // @description  A tampermonkey script that fills form fields, using deepseek to find the best match data for the field.
 // @author       Joolowweng
 // @license      MIT
@@ -60,7 +60,8 @@ function get_response(options, on_start) {
     return __awaiter(this, void 0, void 0, function* () {
         // April 9 2025 - Added a callback function to be executed when the request starts.
         return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest(Object.assign(Object.assign({}, options), { onloadstart: function () {
+            GM_xmlhttpRequest(Object.assign(Object.assign({}, options), {
+                onloadstart: function () {
                     if (on_start) {
                         on_start();
                     }
@@ -82,7 +83,8 @@ function get_response(options, on_start) {
                 }, onerror: (error) => {
                     console.error('[CleverFiller] Request failed:', error);
                     reject(new Error(`${error}`)); // Resolve with null in case of error
-                } }));
+                }
+            }));
         });
     });
 }
@@ -116,37 +118,118 @@ function call_deepseek_api(prompt) {
         }
     });
 }
-// 2025-04-11 @ 21:16:35: Changed the prompt and improved the parsing logic.
 function create_prompt(context, formData) {
+    // 检查是否有选项数据
+    const options = formData['options'] || [];
+    const isSelect = formData['elementType'] === 'select' || (Array.isArray(options) && options.length > 0);
+    // 构建选项列表文本
+    let optionsText = '';
+    if (isSelect && Array.isArray(options)) {
+        optionsText = '\n\n**Available options:**\n';
+        options.forEach(option => {
+            optionsText += `- ${option.text} (value: ${option.value})\n`;
+        });
+        optionsText += '\nPlease return the exact option text from the list above.\n';
+    }
     const prompt = `
-        你是一个Web数据处理专家, 需要根据网页表单的字段信息, 结合我提供的文本信息, 判断这些字段的值应该是什么.
-        直接返回字符串格式的值, **不要任何解释**.
+    You are a precise web form data analysis expert. Based on the form field information and the provided text, determine the most appropriate value to fill in.
+    Always return the value in **English** (for example, for nationality, return "China" not "Chinese" or "中国"). Do not provide any explanation or extra text.
 
-        **工作流程**:
-        1. 仔细阅读用户提供的文本, 识别与每个JSON对象字段相关的信息
-        2. 如果文本信息没有明确标明的值或多个值, 请根据上下文进行合理推测.
-        3. 如果推断的值不确定, 请返回空字符串.
-        4. 如果文本信息中没有相关信息, 请返回空字符串.
+    **Analysis steps**:
+    1. Analyze the field name, label text, and attributes to determine what type of information it is (name, email, phone, nationality, etc.)
+    2. Find information in the text that is directly related to this field
+    3. Check data format according to field type:
+       - If it is an email, ensure the format is xxx@xxx.xxx
+       - If it is a phone number, ensure it is a valid phone format
+       - If it is a date, return in YYYY-MM-DD format
+       - If it is a select menu, always return the visible English option text exactly as shown in the dropdown (not a translation or description)${isSelect ? '\n       - For this select field, only return one of the provided options listed below' : ''}
 
-        -----------------------
+    **Field type**: ${formData['type'] || formData['elementType'] || 'text'}
+    **Field name**: ${formData['name'] || ''}
+    **Label text**: ${formData['labelText'] || ''}${optionsText}
 
-        **文本信息**:
-        ${context}
+    **Precise matching rules**:
+    - If an exact match is found, use it directly
+    - If there are multiple possible matches, choose the most relevant one
+    - Only infer if you are highly confident
+    - If you cannot determine the value, return an empty string
 
-        **JSON格式的字段信息**:
-        ${JSON.stringify(formData)}
+    -----------------------
 
+    **Context information**:
+    ${context}
+
+    **Field details**:
+    ${JSON.stringify(formData, null, 2)}
     `;
     return prompt;
 }
-function parse_ai_response(response) {
-    var _a, _b, _c;
+function parse_ai_response(response, element) {
+    var _a, _b, _c, _d;
     try {
         const msg_content = (_c = (_b = (_a = response === null || response === void 0 ? void 0 : response.choices) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.message) === null || _c === void 0 ? void 0 : _c.content;
         if (!msg_content) {
             throw new Error('Invalid API response format');
         }
-        return msg_content.trim();
+        let value = msg_content.trim();
+        if (element) {
+            const tagName = element.tagName.toLowerCase();
+            const inputType = ((_d = element.getAttribute('type')) === null || _d === void 0 ? void 0 : _d.toLowerCase()) || '';
+            if (tagName === 'input') {
+                if (inputType === 'email' && (!value.includes('@') || !value.includes('.'))) {
+                    console.warn('[CleverFiller] Invalid email format:', value);
+                    value = '';
+                }
+                else if (inputType === 'date') {
+                    const dateMatch = value.match(/\d{4}-\d{2}-\d{2}/);
+                    if (dateMatch) {
+                        value = dateMatch[0];
+                    }
+                    else {
+                        try {
+                            const parsedDate = new Date(value);
+                            if (!isNaN(parsedDate.getTime())) {
+                                value = parsedDate.toISOString().split('T')[0];
+                            }
+                        }
+                        catch (_e) {
+                            console.warn('[CleverFiller] Invalid date format:', value);
+                        }
+                    }
+                }
+                else if (inputType === 'tel') {
+                    value = value.replace(/[^\d+\-().\s]/g, '');
+                }
+                else if (inputType === 'number') {
+                    value = value.replace(/[^\d.-]/g, '');
+                }
+            }
+            else if (tagName === 'select') {
+                const selectElement = element;
+                const options = Array.from(selectElement.options);
+                // 首先尝试通过选项文本精确匹配
+                let optionToSelect = options.find(opt => opt.text.trim().toLowerCase() === value.trim().toLowerCase());
+                // 如果没找到，尝试通过值精确匹配
+                if (!optionToSelect) {
+                    optionToSelect = options.find(opt => opt.value.toLowerCase() === value.toLowerCase());
+                }
+                // 如果还是没有，尝试部分匹配文本
+                if (!optionToSelect) {
+                    optionToSelect = options.find(opt => opt.text.toLowerCase().includes(value.trim().toLowerCase()) ||
+                        value.trim().toLowerCase().includes(opt.text.toLowerCase()));
+                }
+                if (optionToSelect) {
+                    console.log(`[CleverFiller] Select match found: "${value}" -> "${optionToSelect.text}" (${optionToSelect.value})`);
+                    value = optionToSelect.value;
+                }
+                else {
+                    console.warn(`[CleverFiller] No matching option found for: "${value}"`);
+                    // 找不到匹配项，可能需要返回空或第一个选项
+                    value = '';
+                }
+            }
+        }
+        return value;
     }
     catch (error) {
         console.error('Failed to parse API response:', error);
@@ -244,9 +327,9 @@ function create_hover_overlays(elements, cacheArray, dataArray, addCallback, rem
 // 2025.04.12: Updated to handle FormElement array type
 function hover_overlay_handler_for_enlist_button(elements) {
     create_hover_overlays(elements, EnlistCache, EnlistArray, enlist_element, remove_enlist_element, 'rgba(74, 144, 226, 0.1)', // Add color
-    'rgba(244, 67, 54, 0.1)', // Remove color
-    'Select', // Add label
-    'Remove' // Remove label
+        'rgba(244, 67, 54, 0.1)', // Remove color
+        'Select', // Add label
+        'Remove' // Remove label
     );
 }
 // 2025.04.12: Updated to handle FormElement array type
@@ -259,9 +342,9 @@ function hover_overlay_handler_for_load_button(elements, loader_method) {
             GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { preload: PreloadArray }));
             update_load_count(); // 添加这一行来更新badge
         }, remove_preload_element, 'rgba(74, 144, 226, 0.1)', // Add color
-        'rgba(244, 67, 54, 0.1)', // Remove color
-        'Add to Preload', // Add label
-        'Remove' // Remove label
+            'rgba(244, 67, 54, 0.1)', // Remove color
+            'Add to Preload', // Add label
+            'Remove' // Remove label
         );
     }
     else if (loader_method === 'afterload') {
@@ -272,9 +355,9 @@ function hover_overlay_handler_for_load_button(elements, loader_method) {
             GM_setValue(get_window_url(), Object.assign(Object.assign({}, GM_getValue(get_window_url(), default_cache)), { afterload: AfterloadArray }));
             update_load_count(); // 添加这一行来更新badge
         }, remove_afterload_element, 'rgba(74, 144, 226, 0.1)', // Add color
-        'rgba(244, 67, 54, 0.1)', // Remove color
-        'Add to Afterload', // Add label
-        'Remove' // Remove label
+            'rgba(244, 67, 54, 0.1)', // Remove color
+            'Add to Afterload', // Add label
+            'Remove' // Remove label
         );
     }
 }
@@ -293,7 +376,14 @@ function fill_form(element, value) {
     }
     else if (element.tagName === 'SELECT') {
         const selectElement = element;
-        const optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
+        let optionToSelect = Array.from(selectElement.options).find(option => option.value === value);
+        if (!optionToSelect) {
+            optionToSelect = Array.from(selectElement.options).find(option => option.text.trim().toLowerCase() === value.trim().toLowerCase());
+        }
+        // If still not found, try partial match by text
+        if (!optionToSelect) {
+            optionToSelect = Array.from(selectElement.options).find(option => option.text.toLowerCase().includes(value.trim().toLowerCase()));
+        }
         if (optionToSelect) {
             selectElement.value = optionToSelect.value;
             // Trigger change event for select elements
@@ -497,9 +587,21 @@ function remove_afterload_element(element) {
 function extract_data_for_enlist_storage(element) {
     const labelText = get_label_text(element);
     const attributeValues = filter_redundant_attributes(element);
+    // 为select元素收集所有选项
+    // Generated by Copilot
+    let options = [];
+    if (element.tagName === 'SELECT') {
+        const selectElement = element;
+        options = Array.from(selectElement.options).map(option => ({
+            value: option.value,
+            text: option.text
+        }));
+    }
     const data = {
         labelText: labelText,
-        attributeValues: attributeValues
+        attributeValues: attributeValues,
+        options: options,
+        elementType: element.tagName.toLowerCase()
     };
     return data;
 }
@@ -807,7 +909,7 @@ function add_run_button_listener(run_button, container) {
                         loadingText.textContent = `Processing ${enlisted_element_attr.labelText} (${i + 1}/${EnlistCache.length})...`;
                     }
                     const response = yield call_deepseek_api(prompt);
-                    const fieldValue = parse_ai_response(response);
+                    const fieldValue = parse_ai_response(response, cached_element);
                     console.log('[CleverFiller] Field Value:', fieldValue);
                     fill_form(cached_element, fieldValue);
                 }
